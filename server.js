@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const connectDB = require("./config/db");
-
 const mongoose = require('mongoose');
 const User = require('./models/User'); 
 const Post = require('./models/Post');
@@ -11,6 +10,10 @@ require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+
+const otpRoutes = require("./routes/otpRoutes");
+app.use("/auth", otpRoutes);  // now /auth/send-otp and /auth/verify-otp will work
+
 
 // Connect DB
 connectDB();
@@ -25,6 +28,12 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     }
 });
+const authMiddleware = require("./middleware/auth");
+
+
+app.get("/protected", authMiddleware, (req, res) => {
+  res.json({ message: `Hello ${req.user.email}, you have access!` });
+});
 
 // ================== USER REGISTRATION ==================
 app.post('/register', async (req, res) => {
@@ -35,7 +44,7 @@ app.post('/register', async (req, res) => {
     }
 
     // Only allow .edu or specific college domain
-    const allowedDomain = "college.edu"; // <-- replace with your college domain
+    const allowedDomain = "s.amity.edu"; // <-- replace with your college domain
     if (!email.endsWith(`@${allowedDomain}`)) {
         return res.status(400).send("Only college email addresses are allowed.");
     }
