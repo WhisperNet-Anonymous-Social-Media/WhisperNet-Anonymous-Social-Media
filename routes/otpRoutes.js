@@ -3,6 +3,9 @@ const router = express.Router();
 const crypto = require("crypto");
 const User = require("../models/User");
 const nodemailer = require("nodemailer");
+const { verifyOtp } = require("../controllers/authController");
+
+
 
 // Email transporter (using Gmail SMTP)
 const transporter = nodemailer.createTransport({
@@ -51,26 +54,6 @@ router.post("/send-otp", async (req, res) => {
 });
 
 // ================== VERIFY OTP ==================
-router.post("/verify-otp", async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    const user = await User.findOne({ email });
-
-    if (!user) return res.status(400).send("User not found");
-    console.log("Provided:", otp, "Stored:", user.otp);
-
-    if (user.otp !== otp) return res.status(400).send("Invalid OTP");
-    if (Date.now() > user.otpExpires) return res.status(400).send("OTP expired");
-
-    user.verified = true;
-    user.otp = undefined;
-    user.otpExpires = undefined;
-    await user.save();
-
-    res.status(200).json({ message: "Email verified successfully!" });
-  } catch (error) {
-    res.status(500).send("Error verifying OTP: " + error.message);
-  }
-});
+router.post("/verify-otp",verifyOtp);
 
 module.exports = router;
