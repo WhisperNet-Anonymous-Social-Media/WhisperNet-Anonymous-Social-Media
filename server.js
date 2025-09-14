@@ -6,6 +6,8 @@ const mongoose = require('mongoose');
 const User = require('./models/User'); 
 const Post = require('./models/Post');
 const nodemailer = require('nodemailer');
+const postRoutes = require("./routes/postRoutes");
+
 require('dotenv').config();
 
 const app = express();
@@ -28,7 +30,7 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     }
 });
-const authMiddleware = require("./middleware/auth");
+const authMiddleware = require("./middleware/authMiddleware");
 
 
 app.get("/protected", authMiddleware, (req, res) => {
@@ -103,36 +105,10 @@ app.post('/login', async (req, res) => {
 // ================== POSTS ==================
 
 // Create a new anonymous post
-app.post('/posts', async (req, res) => {
-    try {
-        const { content, userId } = req.body;
-
-        if (!content || !userId) {
-            return res.status(400).send("Missing required fields");
-        }
-
-        const post = new Post({
-            content,
-            user: userId,
-            createdAt: new Date()
-        });
-
-        await post.save();
-        res.status(201).send(post);
-    } catch (error) {
-        res.status(500).send("Error creating post: " + error.message);
-    }
-});
+app.use('/posts',postRoutes);
 
 // Fetch feed (latest posts)
-app.get('/posts', async (req, res) => {
-    try {
-        const posts = await Post.find().sort({ createdAt: -1 });
-        res.send(posts);
-    } catch (error) {
-        res.status(500).send("Error fetching posts: " + error.message);
-    }
-});
+app.use('/posts',postRoutes);
 
 // ================== TEST ROUTE ==================
 app.get('/test', (req, res) => {

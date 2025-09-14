@@ -1,5 +1,7 @@
 const User = require("../models/User");
 const generatePseudonym = require("../utils/pseudonym");
+const jwt = require("jsonwebtoken");
+
 
 async function verifyOtp(req, res) {
   const { email, otp } = req.body;
@@ -29,12 +31,21 @@ async function verifyOtp(req, res) {
     }
 
     await user.save();
+    // 🔑 Create JWT token
+
+        const token = jwt.sign(
+      { id: user._id, pseudonym: user.pseudonym }, 
+      process.env.JWT_SECRET, 
+      { expiresIn: "1h" }
+    );
+
     console.log("OTP verified for:", user.email); 
     console.log("Assigned pseudonym:", user.pseudonym);
 
     return res.json({
       message: "OTP verified",
       pseudonym: user.pseudonym,
+        token: token
     });
   } catch (err) {
     console.error("Error verifying OTP:", err);
