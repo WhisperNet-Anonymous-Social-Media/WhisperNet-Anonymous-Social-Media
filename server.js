@@ -7,6 +7,8 @@ const User = require('./models/User');
 const Post = require('./models/Post');
 const nodemailer = require('nodemailer');
 const postRoutes = require("./routes/postRoutes");
+const authMiddleware = require("./middleware/authMiddleware");
+
 
 require('dotenv').config();
 
@@ -14,7 +16,7 @@ const app = express();
 app.use(express.json());
 
 const otpRoutes = require("./routes/otpRoutes");
-app.use("/auth", otpRoutes);  // now /auth/send-otp and /auth/verify-otp will work
+app.use("/auth", otpRoutes);  
 
 
 // Connect DB
@@ -30,7 +32,6 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     }
 });
-const authMiddleware = require("./middleware/authMiddleware");
 
 
 app.get("/protected", authMiddleware, (req, res) => {
