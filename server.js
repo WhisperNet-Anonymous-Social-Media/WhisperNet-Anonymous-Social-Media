@@ -8,12 +8,22 @@ const Post = require('./models/Post');
 const nodemailer = require('nodemailer');
 const postRoutes = require("./routes/postRoutes");
 const authMiddleware = require("./middleware/authMiddleware");
+const cors = require("cors");
+const userRoutes = require("./routes/userroutes");
+
+
 
 
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+// allow frontend to talk to backend
+app.use(cors({
+  origin: "http://localhost:5173", // your React dev server
+  credentials: true
+}));
+app.use("/", userRoutes);
 
 const otpRoutes = require("./routes/otpRoutes");
 app.use("/auth", otpRoutes);  

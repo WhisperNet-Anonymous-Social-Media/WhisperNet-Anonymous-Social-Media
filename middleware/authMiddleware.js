@@ -14,8 +14,8 @@ async function authMiddleware(req, res, next) {
     // Debug log
     console.log("Decoded token:", decoded);
 
-    // Fetch fresh user from DB
-    const user = await User.findById(decoded.id);
+    // Fetch fresh user from DB using decoded.userId
+    const user = await User.findById(decoded.userId);
     console.log("User from DB:", user);
 
     if (!user) {
@@ -26,7 +26,9 @@ async function authMiddleware(req, res, next) {
       return res.status(403).json({ message: "User not verified" });
     }
 
+    // ✅ attach user to req
     req.user = user;
+
     next();
   } catch (err) {
     console.error("JWT Error:", err.message);
