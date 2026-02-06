@@ -3,30 +3,63 @@ require("dotenv").config();
 
 const router = express.Router();
 const Post = require("../models/Post");
-const Notification = require("../models/Notification"); // ✅ Added Notification Model
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/upload");
 const aiGuard = require("../middleware/aiGuard");
 
-// ================== CREATE POST ==================
-router.post("/create", authMiddleware, aiGuard, async (req, res) => {
-  try {
-    const { content, media } = req.body;
+// ================== CREATE POST (TEXT + IMAGE/AUDIO) ==================
+router.post(
+  "/create",
+  authMiddleware,
+  upload.single("file"), // 🔥 REQUIRED for FormData
+  aiGuard,               // 🔥 must be AFTER multer
+  async (req, res) => {
+    try {
+      const { content } = req.body;
 
-    const post = new Post({
-      pseudonym: req.user.pseudonym, // ✅ from token
-      content,
-      media: media || { type: "none" },
-    });
+      // Safety check
+      if (!content && !req.file) {
+        return res.status(400).json({ message: "Post cannot be empty" });
+      }
 
-    await post.save();
-    const io = req.app.get("io");
-    io.emit("new_post", post);
-    res.status(201).json({ message: "Post created successfully", post });
-  } catch (err) {
-    res.status(500).json({ message: "Server error: " + err.message });
+      let media = { type: "none" };
+
+      if (req.file) {
+        const fileType = req.file.mimetype.startsWith("audio")
+          ? "audio"
+          : "image";
+
+        media = {
+          type: fileType,
+          url: req.file.path,
+          publicId: req.file.filename,
+        };
+      }
+
+      const post = new Post({
+        pseudonym: req.user.pseudonym,
+        content,
+        media,
+      });
+
+      await post.save();
+
+      // Emit realtime update
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("new_post", post);
+      }
+
+      res.status(201).json({
+        message: "Post created successfully",
+        post,
+      });
+    } catch (err) {
+      console.error("Create post error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
   }
-});
+);
 
 // ================== GET FEED ==================
 router.get("/feed", authMiddleware, async (req, res) => {
@@ -34,7 +67,7 @@ router.get("/feed", authMiddleware, async (req, res) => {
     const posts = await Post.find().sort({ createdAt: -1 });
     res.json(posts);
   } catch (err) {
-    res.status(500).json({ message: "Server error: " + err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -44,35 +77,21 @@ router.post("/like/:postId", authMiddleware, async (req, res) => {
 
   try {
     const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
 
-    // Toggle like using pseudonym from token
     const index = post.likes.indexOf(req.user.pseudonym);
-    let isLike = false;
-
     if (index === -1) {
       post.likes.push(req.user.pseudonym);
-      isLike = true;
     } else {
       post.likes.splice(index, 1);
     }
 
     await post.save();
-
-    // ✅ NOTIFICATION LOGIC
-    if (isLike && post.pseudonym !== req.user.pseudonym) {
-        await Notification.create({
-            recipient: post.pseudonym,
-            sender: req.user.pseudonym,
-            type: "like",
-            postId: post._id,
-            message: `liked your whisper.`
-        });
-    }
-
     res.json({ message: "Post liked/unliked", likes: post.likes.length });
   } catch (err) {
-    res.status(500).json({ message: "Server error: " + err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -82,34 +101,28 @@ router.post("/comment/:postId", authMiddleware, async (req, res) => {
   const { postId } = req.params;
 
   try {
+    if (!comment?.trim()) {
+      return res.status(400).json({ message: "Comment cannot be empty" });
+    }
+
     const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
 
     post.comments.push({
-      pseudonym: req.user.pseudonym, // ✅ from token
+      pseudonym: req.user.pseudonym,
       comment,
     });
 
     await post.save();
-
-    // ✅ NOTIFICATION LOGIC
-    if (post.pseudonym !== req.user.pseudonym) {
-        await Notification.create({
-            recipient: post.pseudonym,
-            sender: req.user.pseudonym,
-            type: "comment",
-            postId: post._id,
-            message: `commented on your whisper: "${comment.substring(0, 20)}${comment.length > 20 ? '...' : ''}"`
-        });
-    }
-
     res.json({ message: "Comment added", comments: post.comments });
   } catch (err) {
-    res.status(500).json({ message: "Server error: " + err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// ================== UPLOAD MEDIA ==================
+// ================== UPLOAD MEDIA (OPTIONAL STANDALONE) ==================
 router.post(
   "/upload",
   authMiddleware,

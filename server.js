@@ -26,7 +26,7 @@ app.use(express.json());
 
 // Allow frontend to talk to backend
 app.use(cors({
-    origin: "http://localhost:5173", 
+    origin: "http://localhost:5173",
     credentials: true
 }));
 
@@ -96,15 +96,22 @@ app.post('/login', async (req, res) => {
     user.isOnline = true;
     await user.save();
 
-    const token = jwt.sign({ userId: user._id, pseudonym: user.pseudonym }, process.env.JWT_SECRET || "secret_key", { expiresIn: "1d" });
+    const token = jwt.sign({
+        userId: user._id,
+        pseudonym: user.pseudonym
+    }, process.env.JWT_SECRET || "secret_key", {
+        expiresIn: "1d"
+    });
+
     res.status(200).send({ token });
 });
+
 
 // ================== POSTS ==================
 app.use('/posts', postRoutes);
 
 // ================== SOCKET.IO ==================
-const PORT = process.env.PORT || 5001; 
+const PORT = process.env.PORT || 5001;
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: { origin: ["http://localhost:5173", "null"], methods: ["GET", "POST"] }
