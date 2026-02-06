@@ -13,7 +13,7 @@ const bannedWords = [
 
 module.exports = async function aiGuard(req, res, next) {
     try {
-        const { content } = req.body;
+        const content = req.body?.content;
 
         if (!content) return next();
 
