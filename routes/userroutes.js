@@ -61,7 +61,7 @@ router.post("/", async (req, res) => {
 router.get("/account", authMiddleware, async (req, res) => {
   try {
     // ✅ use req.user._id (authMiddleware already attached full user)
-    const user = await User.findById(req.user._id).select("-password -otp -otpExpires");
+    const user = await User.findById(req.user._id).select("-password -otp -otpExpires -passwordResetOtp -passwordResetExpires");
     if (!user) return res.status(404).json({ message: "User not found" });
 
     res.json(user);

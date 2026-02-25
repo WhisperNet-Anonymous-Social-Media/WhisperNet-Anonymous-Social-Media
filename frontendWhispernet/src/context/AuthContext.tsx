@@ -6,6 +6,7 @@ interface User {
   email: string;
   pseudonym?: string;
   isAdmin: boolean;
+  isBanned?: boolean;
   userId: string;
 }
 
@@ -32,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser({
             email: "User", 
             userId: decoded.userId,
-            isAdmin: false, // Update if your token contains role info
+            isAdmin: !!decoded.isAdmin,
             pseudonym: decoded.pseudonym
         });
         setToken(storedToken);
@@ -72,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser({ 
       email, 
       userId: decoded.userId, 
-      isAdmin: email.includes("admin"), 
+      isAdmin: !!decoded.isAdmin, 
       pseudonym: decoded.pseudonym 
     });
     navigate("/");

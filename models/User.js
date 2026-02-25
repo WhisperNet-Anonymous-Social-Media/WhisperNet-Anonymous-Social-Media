@@ -17,6 +17,10 @@ const userSchema = new mongoose.Schema({
     isOnline: { type: Boolean, default: false },
     lastSeen: { type: Date, default: Date.now },
     mutedUsers: [{ type: String }] 
+    ,
+    isAdmin: { type: Boolean, default: false },
+    isBanned: { type: Boolean, default: false },
+    bannedReason: { type: String, default: "" }
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);

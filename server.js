@@ -16,6 +16,7 @@ const aiRoutes = require("./routes/aiRoutes");
 const vibeRoutes = require("./routes/vibeRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 const { generateOTP } = require("./utils/otp");
 
 require('dotenv').config();
@@ -38,6 +39,7 @@ app.use("/", userRoutes);
 app.use("/api/vibe", vibeRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/admin", adminRoutes);
 
 const otpRoutes = require("./routes/otpRoutes");
 app.use("/auth", otpRoutes);
@@ -101,6 +103,7 @@ app.post('/login', async (req, res) => {
     if (!user) return res.status(401).send("Invalid credentials");
     if (!(await bcrypt.compare(password, user.password))) return res.status(401).send("Invalid credentials");
     if (!user.verified) return res.status(403).send("Please verify your college email first.");
+    if (user.isBanned) return res.status(403).send(user.bannedReason || "Account is banned");
 
     // Update Online Status on Login
     user.isOnline = true;
@@ -108,7 +111,8 @@ app.post('/login', async (req, res) => {
 
     const token = jwt.sign({
         userId: user._id,
-        pseudonym: user.pseudonym
+        pseudonym: user.pseudonym,
+        isAdmin: !!user.isAdmin
     }, process.env.JWT_SECRET || "secret_key", {
         expiresIn: "1d"
     });

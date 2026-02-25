@@ -21,6 +21,9 @@ async function authMiddleware(req, res, next) {
     if (!user.verified) {
       return res.status(403).json({ message: "User not verified" });
     }
+    if (user.isBanned) {
+      return res.status(403).json({ message: user.bannedReason || "Account is banned" });
+    }
 
     // ✅ attach user to req
     req.user = user;

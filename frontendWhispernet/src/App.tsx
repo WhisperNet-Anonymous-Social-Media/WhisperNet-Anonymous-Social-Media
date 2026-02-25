@@ -9,6 +9,7 @@ import { ExplorePage } from "./pages/ExplorePage";
 import { Layout } from "./components/Layout";
 import { AuthProvider } from "./context/AuthContext";
 import { PrivateRoute } from "./components/PrivateRoute";
+import { AdminRoute } from "./components/AdminRoute";
 import { toast, Toaster } from "sonner";
 import { CallProvider } from "./context/CallContext";
 
@@ -49,14 +50,16 @@ function App() {
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/bookmarks" element={<BookmarksPage />} />
                 <Route path="/explore" element={<ExplorePage />} />
-                <Route
-                  path="/admin"
-                  element={
-                    <Suspense fallback={<div className="p-6 text-slate-400">Loading admin...</div>}>
-                      <AdminDashboardPage />
-                    </Suspense>
-                  }
-                />
+                <Route element={<AdminRoute />}>
+                  <Route
+                    path="/admin"
+                    element={
+                      <Suspense fallback={<div className="p-6 text-slate-400">Loading admin...</div>}>
+                        <AdminDashboardPage />
+                      </Suspense>
+                    }
+                  />
+                </Route>
               </Route>
             </Route>
           </Routes>

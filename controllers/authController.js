@@ -50,7 +50,7 @@ async function verifyOtp(req, res) {
 
     // 🔑 Create JWT token
     const token = jwt.sign(
-      { userId: user._id, pseudonym: user.pseudonym }, 
+      { userId: user._id, pseudonym: user.pseudonym, isAdmin: !!user.isAdmin }, 
       process.env.JWT_SECRET, 
       { expiresIn: "1h" }
     );
