@@ -132,6 +132,8 @@ Local Run (Single DB)
 - Start frontend:
   - `cd frontendWhispernet`
   - `npm run dev`
+- Reset to a fully fresh DB (no users/posts/messages): `npm run db:fresh`
+- Optional: seed admin after reset: `npm run db:seed-admin`
 
 Recommended local frontend env in `frontendWhispernet`:
 

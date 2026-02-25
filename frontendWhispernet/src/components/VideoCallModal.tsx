@@ -53,6 +53,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
 }) => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const localCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const remoteCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -97,6 +98,13 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       remoteVideoRef.current?.play().catch(() => {});
     };
     remoteVideoRef.current.play().catch(() => {});
+  }, [remoteStream]);
+
+  // Voice calls can fail to play if only a hidden video element is used.
+  useEffect(() => {
+    if (!remoteAudioRef.current || !remoteStream) return;
+    remoteAudioRef.current.srcObject = remoteStream;
+    remoteAudioRef.current.play().catch(() => {});
   }, [remoteStream]);
 
   useEffect(() => {
@@ -193,6 +201,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       {/* Hidden video elements used as canvas sources */}
       <video ref={localVideoRef} muted playsInline autoPlay className="hidden" />
       <video ref={remoteVideoRef} playsInline autoPlay className="hidden" />
+      <audio ref={remoteAudioRef} autoPlay className="hidden" />
     </div>
   );
 };

@@ -42,6 +42,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const ringTimerRef = useRef<number | null>(null);
   const pendingSignalsRef = useRef<any[]>([]);
+  const incomingCallRef = useRef<IncomingCall | null>(null);
+  const startInFlightRef = useRef(false);
 
   const createPeer = useCallback((options: any) => {
     const PeerAny: any = PeerCtor as any;
@@ -93,8 +95,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     peerRef.current = null;
     setRemoteStream(null);
     setIncomingCall(null);
+    incomingCallRef.current = null;
+    setCallContact(null);
+    setCallMode("voice");
     setIsInCall(false);
     pendingSignalsRef.current = [];
+    startInFlightRef.current = false;
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
       setLocalStream(null);
@@ -111,7 +117,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const startCallInternal = useCallback(async (contact: string, mode: "voice" | "video") => {
     if (!socket || !user?.pseudonym || !contact) return;
+    if (startInFlightRef.current || isInCall || incomingCallRef.current) return;
     try {
+      startInFlightRef.current = true;
       const stream = await getLocalStream(mode);
       setCallContact(contact);
       setCallMode(mode);
@@ -153,8 +161,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       toast.error(err?.message || "Could not start call");
       endCall(false);
+    } finally {
+      startInFlightRef.current = false;
     }
-  }, [socket, user, getLocalStream, endCall, createPeer]);
+  }, [socket, user, getLocalStream, endCall, createPeer, isInCall]);
 
   const startVoiceCall = useCallback(async (contact: string) => {
     await startCallInternal(contact, "voice");
@@ -169,7 +179,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [startVoiceCall]);
 
   const answerCall = useCallback(async () => {
-    if (!socket || !user?.pseudonym || !incomingCall) return;
+    const activeIncoming = incomingCallRef.current || incomingCall;
+    if (!socket || !user?.pseudonym || !activeIncoming) return;
     try {
       const stream = await getLocalStream(callMode);
 
@@ -185,14 +196,14 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       peer.on("signal", (signalData: any) => {
         if (signalData?.type === "answer") {
           socket.emit("answerCall", {
-            to: incomingCall.from,
+            to: activeIncoming.from,
             signal: signalData,
             from: user.pseudonym,
           });
           return;
         }
         if (signalData?.candidate) {
-          socket.emit("iceCandidate", { to: incomingCall.from, candidate: signalData, from: user.pseudonym });
+          socket.emit("iceCandidate", { to: activeIncoming.from, candidate: signalData, from: user.pseudonym });
         }
       });
 
@@ -204,7 +215,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       peer.on("error", () => endCall(false));
       peer.on("close", () => endCall(false));
 
-      peer.signal(incomingCall.signal);
+      peer.signal(activeIncoming.signal);
       peerRef.current = peer;
 
       if (pendingSignalsRef.current.length) {
@@ -216,23 +227,27 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         pendingSignalsRef.current = [];
       }
 
-      setCallContact(incomingCall.from);
+      setCallContact(activeIncoming.from);
       setIncomingCall(null);
+      incomingCallRef.current = null;
       setIsCallModalOpen(true);
       stopRinging();
     } catch (err: any) {
       toast.error(err?.message || "Could not answer call");
       setIncomingCall(null);
+      incomingCallRef.current = null;
       setIsCallModalOpen(false);
       stopRinging();
     }
   }, [socket, user, incomingCall, getLocalStream, callMode, endCall, createPeer, stopRinging]);
 
   const declineCall = useCallback(() => {
-    if (socket && incomingCall?.from && user?.pseudonym) {
-      socket.emit("callDeclined", { to: incomingCall.from, from: user.pseudonym });
+    const activeIncoming = incomingCallRef.current || incomingCall;
+    if (socket && activeIncoming?.from && user?.pseudonym) {
+      socket.emit("callDeclined", { to: activeIncoming.from, from: user.pseudonym });
     }
     setIncomingCall(null);
+    incomingCallRef.current = null;
     setIsCallModalOpen(false);
     stopRinging();
   }, [socket, incomingCall, user, stopRinging]);
@@ -253,6 +268,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       setIncomingCall({ from, signal });
+      incomingCallRef.current = { from, signal };
       setCallContact(from);
       setCallMode(mode === "video" ? "video" : "voice");
       setIsCallModalOpen(true);
