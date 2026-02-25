@@ -20,10 +20,19 @@ ${text}
 `;
 
     const model = genAI.getGenerativeModel({
-        model: "gemini-3-flash-preview"
+        model: "gemini-1.5-flash"
     });
 
     const result = await model.generateContent(prompt);
-
-    return JSON.parse(result.response.text());
+    const raw = String(result?.response?.text?.() || "").trim();
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+        return {
+            mood: "Mixed",
+            emoji: "🌀",
+            confidence: 60,
+            summary: "Campus conversations are diverse right now."
+        };
+    }
+    return JSON.parse(jsonMatch[0]);
 };

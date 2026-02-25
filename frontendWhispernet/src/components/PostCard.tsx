@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Heart, MessageCircle, MoreHorizontal, Clock, Sparkles, Send, Copy, AlertTriangle, Trash2, Repeat, Bookmark, BarChart3, Pin } from 'lucide-react';
+import { Heart, MessageCircle, MoreHorizontal, Clock, Sparkles, Send, Copy, AlertTriangle, Trash2, Repeat, Bookmark, BarChart3, Pin, Volume2, VolumeX, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
@@ -67,6 +67,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, currentPseudonym, onDe
   const [summary, setSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [poll, setPoll] = useState(displayPost.poll);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   
   const navigate = useNavigate();
 
@@ -77,6 +78,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post, currentPseudonym, onDe
     setLikes(isLiked ? likes - 1 : likes + 1);
     try { await API.post(`/posts/like/${displayPost._id}`); } catch (e) { /* rollback */ }
   };
+
+  const wordsCount = useMemo(() => {
+    return (displayPost.content || "").trim().split(/\s+/).filter(Boolean).length;
+  }, [displayPost.content]);
+
+  const readingTimeMinutes = useMemo(() => {
+    return Math.max(1, Math.ceil(wordsCount / 180));
+  }, [wordsCount]);
 
   const handleReshare = async () => {
     if (isReshared) return; // Simple prevent double reshare for now
@@ -145,6 +154,25 @@ export const PostCard: React.FC<PostCardProps> = ({ post, currentPseudonym, onDe
     toast.success(`${displayPost.pseudonym} muted`);
   };
 
+  const handleSpeakToggle = () => {
+    if (!("speechSynthesis" in window)) {
+      toast.error("Text-to-speech not supported in this browser");
+      return;
+    }
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(displayPost.content || "");
+    utterance.rate = 0.98;
+    utterance.pitch = 1;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleVote = async (optionIndex: number) => {
     try {
       const { data } = await API.post(`/posts/vote/${displayPost._id}`, { optionIndex });
@@ -188,6 +216,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post, currentPseudonym, onDe
     };
     sendImpression();
   }, [displayPost._id]);
+
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    };
+  }, []);
 
   return (
     <Card className="mb-8 overflow-hidden border border-slate-700 bg-slate-900/95 backdrop-blur-md shadow-[0_18px_36px_-24px_rgba(2,6,23,0.7)] hover:border-blue-500/50 transition-all duration-300 rounded-2xl">
@@ -246,6 +280,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post, currentPseudonym, onDe
                   <DropdownMenuItem onClick={handleCopyText} className="cursor-pointer focus:bg-slate-800 py-2.5 rounded-md">
                     <Copy className="mr-3 h-4 w-4" /> Copy Text
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSpeakToggle} className="cursor-pointer focus:bg-slate-800 py-2.5 rounded-md">
+                    {isSpeaking ? <VolumeX className="mr-3 h-4 w-4" /> : <Volume2 className="mr-3 h-4 w-4" />}
+                    {isSpeaking ? "Stop Read Aloud" : "Read Aloud"}
+                  </DropdownMenuItem>
                   
                   {isOwner ? (
                     <>
@@ -275,7 +313,13 @@ export const PostCard: React.FC<PostCardProps> = ({ post, currentPseudonym, onDe
               </DropdownMenu>
             </div>
             
-            <div className="mt-4 text-[17px] leading-8 text-slate-200 whitespace-pre-wrap font-normal break-words">
+            <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-500 uppercase tracking-wide">
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 px-2 py-0.5">
+                <BookOpen className="h-3 w-3" /> {readingTimeMinutes} min read
+              </span>
+              <span>{wordsCount} words</span>
+            </div>
+            <div className="mt-4 text-[17px] leading-8 text-slate-200 whitespace-pre-wrap font-normal break-words" onDoubleClick={handleLike} title="Double click to like">
               {renderContent(displayPost.content || "")}
             </div>
 
@@ -312,11 +356,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, currentPseudonym, onDe
             {!hideMedia && displayPost.media && displayPost.media.type !== 'none' && (
               <div className="mt-5 rounded-2xl overflow-hidden border border-slate-700 bg-slate-950 shadow-sm">
                 {displayPost.media.type === 'image' ? (
-                  <img src={optimizeCloudinaryMediaUrl(displayPost.media.url, displayPost.media.type)} alt="Content" className="w-full h-auto max-h-[600px] object-cover" />
+                  <img loading="lazy" decoding="async" src={optimizeCloudinaryMediaUrl(displayPost.media.url, displayPost.media.type)} alt="Content" className="w-full h-auto max-h-[600px] object-cover" />
                 ) : displayPost.media.type === 'video' ? (
-                  <video controls src={optimizeCloudinaryMediaUrl(displayPost.media.url, displayPost.media.type)} className="w-full max-h-[600px] object-cover" />
+                  <video controls autoPlay muted loop playsInline preload="metadata" src={optimizeCloudinaryMediaUrl(displayPost.media.url, displayPost.media.type)} className="w-full max-h-[600px] object-cover" />
                 ) : (
-                  <div className="p-4"><audio controls src={optimizeCloudinaryMediaUrl(displayPost.media.url, displayPost.media.type)} className="w-full" /></div>
+                  <div className="p-4"><audio controls preload="metadata" src={optimizeCloudinaryMediaUrl(displayPost.media.url, displayPost.media.type)} className="w-full" /></div>
                 )}
               </div>
             )}

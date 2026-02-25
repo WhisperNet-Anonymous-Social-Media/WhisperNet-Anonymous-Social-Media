@@ -12,10 +12,13 @@ type IncomingCall = {
 
 type CallContextType = {
   callContact: string | null;
+  callMode: "voice" | "video";
   isInCall: boolean;
   isCallModalOpen: boolean;
   incomingCall: IncomingCall | null;
   startCall: (contact: string) => Promise<void>;
+  startVoiceCall: (contact: string) => Promise<void>;
+  startVideoCall: (contact: string) => Promise<void>;
   answerCall: () => Promise<void>;
   declineCall: () => void;
   endCall: (notifyPeer?: boolean) => void;
@@ -34,6 +37,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [isInCall, setIsInCall] = useState(false);
   const [isCallModalOpen, setIsCallModalOpen] = useState(false);
+  const [callMode, setCallMode] = useState<"voice" | "video">("voice");
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const ringTimerRef = useRef<number | null>(null);
@@ -76,9 +80,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 1100);
   }, [stopRinging]);
 
-  const getLocalStream = useCallback(async () => {
+  const getLocalStream = useCallback(async (mode: "voice" | "video") => {
     if (localStream) return localStream;
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: mode === "video", audio: true });
     setLocalStream(stream);
     return stream;
   }, [localStream]);
@@ -105,16 +109,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hardCleanup();
   }, [socket, callContact, user, hardCleanup]);
 
-  const startCall = useCallback(async (contact: string) => {
+  const startCallInternal = useCallback(async (contact: string, mode: "voice" | "video") => {
     if (!socket || !user?.pseudonym || !contact) return;
     try {
-      const stream = await getLocalStream();
+      const stream = await getLocalStream(mode);
       setCallContact(contact);
+      setCallMode(mode);
       setIsCallModalOpen(true);
 
       const peer = createPeer({
         initiator: true,
-        trickle: false,
+        trickle: true,
         stream,
         config: {
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -122,12 +127,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       peer.on("signal", (signalData: any) => {
-        if (signalData?.type !== "offer") return;
-        socket.emit("callUser", {
-          userToCall: contact,
-          signalData,
-          from: user.pseudonym,
-        });
+        if (signalData?.type === "offer") {
+          socket.emit("callUser", {
+            userToCall: contact,
+            signalData,
+            from: user.pseudonym,
+            mode,
+          });
+          return;
+        }
+        if (signalData?.candidate) {
+          socket.emit("iceCandidate", { to: contact, candidate: signalData, from: user.pseudonym });
+        }
       });
 
       peer.on("stream", (streamFromPeer: MediaStream) => {
@@ -145,14 +156,26 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [socket, user, getLocalStream, endCall, createPeer]);
 
+  const startVoiceCall = useCallback(async (contact: string) => {
+    await startCallInternal(contact, "voice");
+  }, [startCallInternal]);
+
+  const startVideoCall = useCallback(async (_contact: string) => {
+    toast.info("Video call is coming soon. Use voice call for now.");
+  }, []);
+
+  const startCall = useCallback(async (contact: string) => {
+    await startVoiceCall(contact);
+  }, [startVoiceCall]);
+
   const answerCall = useCallback(async () => {
     if (!socket || !user?.pseudonym || !incomingCall) return;
     try {
-      const stream = await getLocalStream();
+      const stream = await getLocalStream(callMode);
 
       const peer = createPeer({
         initiator: false,
-        trickle: false,
+        trickle: true,
         stream,
         config: {
           iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -160,12 +183,17 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       peer.on("signal", (signalData: any) => {
-        if (signalData?.type !== "answer") return;
-        socket.emit("answerCall", {
-          to: incomingCall.from,
-          signal: signalData,
-          from: user.pseudonym,
-        });
+        if (signalData?.type === "answer") {
+          socket.emit("answerCall", {
+            to: incomingCall.from,
+            signal: signalData,
+            from: user.pseudonym,
+          });
+          return;
+        }
+        if (signalData?.candidate) {
+          socket.emit("iceCandidate", { to: incomingCall.from, candidate: signalData, from: user.pseudonym });
+        }
       });
 
       peer.on("stream", (streamFromPeer: MediaStream) => {
@@ -198,7 +226,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsCallModalOpen(false);
       stopRinging();
     }
-  }, [socket, user, incomingCall, getLocalStream, endCall, createPeer, stopRinging]);
+  }, [socket, user, incomingCall, getLocalStream, callMode, endCall, createPeer, stopRinging]);
 
   const declineCall = useCallback(() => {
     if (socket && incomingCall?.from && user?.pseudonym) {
@@ -217,7 +245,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!socket) return;
 
-    const onIncomingCall = ({ from, signal }: { from: string; signal: any }) => {
+    const onIncomingCall = ({ from, signal, mode }: { from: string; signal: any; mode?: "voice" | "video" }) => {
       if (isInCall) {
         if (socket && user?.pseudonym) {
           socket.emit("callDeclined", { to: from, from: user.pseudonym });
@@ -226,10 +254,11 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setIncomingCall({ from, signal });
       setCallContact(from);
+      setCallMode(mode === "video" ? "video" : "voice");
       setIsCallModalOpen(true);
       startRinging();
 
-      toast("Incoming video call", {
+      toast(`Incoming ${mode === "video" ? "video" : "voice"} call`, {
         description: `${from} is calling you`,
         action: {
           label: "Accept",
@@ -306,7 +335,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isInCall,
         isCallModalOpen,
         incomingCall,
+        callMode,
         startCall,
+        startVoiceCall,
+        startVideoCall,
         answerCall,
         declineCall,
         endCall,
@@ -318,6 +350,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       <VideoCallModal
         open={isCallModalOpen}
         isIncoming={!!incomingCall && !isInCall}
+        mode={callMode}
         contact={incomingCall?.from || callContact}
         localStream={localStream}
         remoteStream={remoteStream}

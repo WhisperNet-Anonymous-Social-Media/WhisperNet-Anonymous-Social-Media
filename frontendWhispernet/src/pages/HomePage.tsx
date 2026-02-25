@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import API from '@/api';
 import { CreatePostForm } from '@/components/CreatePostForm';
 import { PostCard } from '@/components/PostCard';
@@ -13,6 +13,10 @@ interface Post {
   pseudonym: string;
   content: string;
   media?: { url: string; type: string };
+  poll?: {
+    question: string;
+    options: Array<{ text: string; voters: string[] }>;
+  };
   likes: string[];
   comments: any[];
   impressions?: number;
@@ -30,6 +34,8 @@ export const HomePage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sortMode, setSortMode] = useState<'latest' | 'top'>('latest');
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [mediaFilter, setMediaFilter] = useState<'all' | 'image' | 'video' | 'audio' | 'poll' | 'text'>('all');
   const [pinnedPostId, setPinnedPostId] = useState<string | null>(() => localStorage.getItem(PINNED_KEY));
   const [mutedWords, setMutedWords] = useState<string[]>(() => {
     try {
@@ -41,6 +47,7 @@ export const HomePage: React.FC = () => {
   const [newMutedWord, setNewMutedWord] = useState('');
   const [hideMediaMode, setHideMediaMode] = useState(false);
   const [hideReshares, setHideReshares] = useState(false);
+  const [pendingPosts, setPendingPosts] = useState<Post[]>([]);
 
   const currentUser = JSON.parse(atob(localStorage.getItem('whispernet_token')?.split('.')[1] || '{}'));
   const socket = useSocket();
@@ -63,15 +70,19 @@ export const HomePage: React.FC = () => {
     if (!socket) return;
     socket.on('new_post', (newPost: Post) => {
       if (mutedUsers.includes(newPost.pseudonym)) return;
-      setPosts((prev) => [newPost, ...prev]);
-      toast.info('Someone just whispered...', {
-        position: 'top-center',
-      });
+      setPendingPosts((prev) => [newPost, ...prev].slice(0, 40));
     });
     return () => {
       socket.off('new_post');
     };
   }, [socket, mutedUsers]);
+
+  const flushPendingPosts = () => {
+    if (!pendingPosts.length) return;
+    setPosts((prev) => [...pendingPosts, ...prev]);
+    setPendingPosts([]);
+    toast.success(`${pendingPosts.length} new whisper${pendingPosts.length > 1 ? 's' : ''} loaded`);
+  };
 
   const handleCreatePost = async (formData: any) => {
     setIsSubmitting(true);
@@ -92,31 +103,47 @@ export const HomePage: React.FC = () => {
     setPosts((prev) => prev.filter((p) => p._id !== postId));
   };
 
-  const hashtagCounts = posts.reduce<Record<string, number>>((acc, post) => {
+  const hashtagCounts = useMemo(() => posts.reduce<Record<string, number>>((acc, post) => {
     const tags = (post.content || '').match(/#[a-z0-9_]+/gi) || [];
     tags.forEach((t) => {
       const key = t.toLowerCase();
       acc[key] = (acc[key] || 0) + 1;
     });
     return acc;
-  }, {});
-  const topTags = Object.entries(hashtagCounts)
+  }, {}), [posts]);
+  const topTags = useMemo(() => Object.entries(hashtagCounts)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+    .slice(0, 5), [hashtagCounts]);
 
-  const shadowCounts = posts.reduce<Record<string, number>>((acc, post) => {
+  const shadowCounts = useMemo(() => posts.reduce<Record<string, number>>((acc, post) => {
     acc[post.pseudonym] = (acc[post.pseudonym] || 0) + 1;
     return acc;
-  }, {});
-  const topShadows = Object.entries(shadowCounts)
+  }, {}), [posts]);
+  const topShadows = useMemo(() => Object.entries(shadowCounts)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+    .slice(0, 5), [shadowCounts]);
 
   const filteredByTag = posts.filter((p) =>
     activeTag ? (p.content || '').toLowerCase().includes(activeTag.toLowerCase()) : true
   );
 
-  const keywordFiltered = filteredByTag.filter((p) => {
+  const searchFiltered = filteredByTag.filter((p) => {
+    if (!searchText.trim()) return true;
+    const term = searchText.toLowerCase();
+    return (
+      String(p.content || '').toLowerCase().includes(term) ||
+      String(p.pseudonym || '').toLowerCase().includes(term)
+    );
+  });
+
+  const mediaTypeFiltered = searchFiltered.filter((p) => {
+    if (mediaFilter === 'all') return true;
+    if (mediaFilter === 'poll') return !!p.poll?.question;
+    if (mediaFilter === 'text') return (!p.media || p.media.type === 'none') && !p.poll?.question;
+    return p.media?.type === mediaFilter;
+  });
+
+  const keywordFiltered = mediaTypeFiltered.filter((p) => {
     const text = String(p.content || '').toLowerCase();
     return !mutedWords.some((w) => {
       const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -198,6 +225,28 @@ export const HomePage: React.FC = () => {
               </div>
             </div>
 
+            <div className="mb-4 px-2 flex flex-wrap gap-2">
+              <input
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Search whispers or pseudonyms..."
+                className="flex-1 min-w-[240px] rounded-full border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-slate-200 outline-none"
+              />
+              {(['all', 'image', 'video', 'audio', 'poll', 'text'] as const).map((type) => (
+                <Button key={type} size="sm" variant={mediaFilter === type ? 'default' : 'secondary'} onClick={() => setMediaFilter(type)}>
+                  {type}
+                </Button>
+              ))}
+            </div>
+
+            {pendingPosts.length > 0 && (
+              <div className="mb-4 px-2">
+                <Button onClick={flushPendingPosts} className="rounded-full">
+                  Show {pendingPosts.length} new whisper{pendingPosts.length > 1 ? 's' : ''}
+                </Button>
+              </div>
+            )}
+
             {activeTag && (
               <div className="mb-4 px-2">
                 <Button size="sm" variant="secondary" onClick={() => setActiveTag(null)}>
@@ -236,7 +285,7 @@ export const HomePage: React.FC = () => {
           </div>
         </section>
 
-        <aside className="space-y-5 xl:sticky xl:top-24 self-start pr-1">
+        <aside className="space-y-5 xl:sticky xl:top-24 self-start pr-1 h-fit">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}

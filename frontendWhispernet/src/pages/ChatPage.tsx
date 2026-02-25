@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Clock, Flame, Ghost, Sparkles, MoreVertical, BellOff, CheckCircle, Phone, Check, CheckCheck } from 'lucide-react';
+import { Send, Clock, Flame, Ghost, Sparkles, MoreVertical, BellOff, CheckCircle, Phone, Check, CheckCheck, Video } from 'lucide-react';
 import { formatDistanceToNow, formatDistanceToNowStrict } from 'date-fns';
 import { useAuth } from '@/context/AuthContext';
 import EmojiPicker from 'emoji-picker-react';
@@ -36,7 +36,7 @@ export const ChatPage: React.FC = () => {
   const { state } = useLocation();
   const socket = useSocket();
   const { user } = useAuth();
-  const { startCall } = useCall();
+  const { startVoiceCall, startVideoCall } = useCall();
   
   const [activeContact, setActiveContact] = useState<string | null>(state?.contact || null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -237,15 +237,26 @@ export const ChatPage: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => activeContact && startCall(activeContact)}
-                    className="hover:bg-emerald-500/10 text-emerald-400 rounded-full"
-                    disabled={!activeContact}
-                  >
-                    <Phone className="w-4 h-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="hover:bg-emerald-500/10 text-emerald-400 rounded-full"
+                        disabled={!activeContact}
+                      >
+                        <Phone className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-slate-900 border-slate-700 text-slate-200">
+                      <DropdownMenuItem onClick={() => activeContact && startVoiceCall(activeContact)}>
+                        <Phone className="w-4 h-4 mr-2" /> Voice call
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => activeContact && startVideoCall(activeContact)}>
+                        <Video className="w-4 h-4 mr-2" /> Video call (Coming soon)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <div className="hidden md:flex items-center text-[10px] text-orange-300 font-medium bg-orange-950/50 px-3 py-1 rounded-full border border-orange-700/60">
                     <Flame className="w-3 h-3 mr-1" /> Burn: 24h
                   </div>

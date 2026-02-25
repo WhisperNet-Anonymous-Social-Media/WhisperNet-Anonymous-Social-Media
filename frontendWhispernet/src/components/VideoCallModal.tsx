@@ -5,6 +5,7 @@ import { PhoneOff, PhoneCall } from "lucide-react";
 interface VideoCallModalProps {
   open: boolean;
   isIncoming: boolean;
+  mode?: "voice" | "video";
   contact?: string | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
@@ -42,6 +43,7 @@ function drawVideoToCanvas(
 export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   open,
   isIncoming,
+  mode = "video",
   contact,
   localStream,
   remoteStream,
@@ -58,6 +60,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const [localReady, setLocalReady] = useState(false);
   const [remoteReady, setRemoteReady] = useState(false);
   const displayName = useMemo(() => contact || "Unknown", [contact]);
+  const isVoiceOnly = mode === "voice";
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +100,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   }, [remoteStream]);
 
   useEffect(() => {
+    if (isVoiceOnly) return;
     if (!open || !localVideoRef.current || !localCanvasRef.current || !localReady) return;
     let active = true;
     const stopLocal = drawVideoToCanvas(localVideoRef.current, localCanvasRef.current, blur, () => active);
@@ -104,9 +108,10 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       active = false;
       stopLocal();
     };
-  }, [open, blur, localReady]);
+  }, [open, blur, localReady, isVoiceOnly]);
 
   useEffect(() => {
+    if (isVoiceOnly) return;
     if (!open || !remoteVideoRef.current || !remoteCanvasRef.current || !remoteReady) return;
     let active = true;
     const stopRemote = drawVideoToCanvas(remoteVideoRef.current, remoteCanvasRef.current, blur, () => active);
@@ -114,7 +119,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       active = false;
       stopRemote();
     };
-  }, [open, blur, remoteReady]);
+  }, [open, blur, remoteReady, isVoiceOnly]);
 
   if (!open) return null;
 
@@ -123,7 +128,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       <div className="w-full max-w-5xl rounded-3xl border border-slate-700 bg-slate-900/95 shadow-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
           <div>
-            <p className="text-sm text-slate-500">Encrypted Video Call</p>
+            <p className="text-sm text-slate-500">{isVoiceOnly ? "Encrypted Voice Call" : "Encrypted Video Call"}</p>
             <h3 className="text-lg font-semibold text-slate-100">
               {isIncoming ? `Incoming call from ${displayName}` : `Call with ${displayName}`}
             </h3>
@@ -135,18 +140,30 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
         <div className="grid md:grid-cols-2 gap-4 p-4 bg-slate-950">
           <div className="rounded-2xl border border-slate-700 overflow-hidden bg-slate-900 relative min-h-[240px]">
-            <canvas ref={localCanvasRef} className="w-full h-full object-cover" />
-            {!localReady && (
-              <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">Starting camera...</div>
+            {isVoiceOnly ? (
+              <div className="absolute inset-0 grid place-items-center text-slate-300 text-sm">Voice call in progress</div>
+            ) : (
+              <>
+                <canvas ref={localCanvasRef} className="w-full h-full object-cover" />
+                {!localReady && (
+                  <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">Starting camera...</div>
+                )}
+              </>
             )}
             <span className="absolute bottom-2 left-2 text-xs bg-slate-900/90 text-slate-300 px-2 py-1 rounded border border-slate-700">
               You
             </span>
           </div>
           <div className="rounded-2xl border border-slate-700 overflow-hidden bg-slate-900 relative min-h-[240px]">
-            <canvas ref={remoteCanvasRef} className="w-full h-full object-cover" />
-            {!remoteReady && (
-              <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">Waiting for remote video...</div>
+            {isVoiceOnly ? (
+              <div className="absolute inset-0 grid place-items-center text-slate-300 text-sm">Connected to {displayName}</div>
+            ) : (
+              <>
+                <canvas ref={remoteCanvasRef} className="w-full h-full object-cover" />
+                {!remoteReady && (
+                  <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">Waiting for remote video...</div>
+                )}
+              </>
             )}
             <span className="absolute bottom-2 left-2 text-xs bg-slate-900/90 text-slate-300 px-2 py-1 rounded border border-slate-700">
               {displayName}

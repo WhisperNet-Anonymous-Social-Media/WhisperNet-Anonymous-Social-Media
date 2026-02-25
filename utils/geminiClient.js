@@ -1,19 +1,35 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const apiKey = process.env.GEMINI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+
+const MODEL_CANDIDATES = [
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
+];
 
 async function askGemini(prompt) {
-    try {
-        const model = genAI.getGenerativeModel({
-            model: "gemini-3-flash-preview"   // ✅ FIXED MODEL
-        });
+  if (!genAI) {
+    const err = new Error("GEMINI_API_KEY is missing");
+    err.code = "GEMINI_KEY_MISSING";
+    throw err;
+  }
 
-        const result = await model.generateContent(prompt);
-        return result.response.text();
+  let lastError = null;
+  for (const modelName of MODEL_CANDIDATES) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const text = result?.response?.text?.();
+      if (!text) throw new Error("Empty Gemini response");
+      return text;
     } catch (err) {
-        console.error("Gemini Error:", err.message);
-        throw err;
+      lastError = err;
+      console.error(`Gemini Error (${modelName}):`, err.message);
     }
+  }
+
+  throw lastError || new Error("Gemini request failed");
 }
 
 module.exports = askGemini;

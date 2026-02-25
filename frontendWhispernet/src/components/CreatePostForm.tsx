@@ -12,6 +12,8 @@ interface CreatePostFormProps {
 
 export const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit, isSubmitting }) => {
   const DRAFT_KEY = "whispernet_post_draft";
+  const MAX_CHARS = 1200;
+  const quickTemplates = ["Hot take:", "Campus update:", "Need help with:", "Unpopular opinion:"];
   const [content, setContent] = useState('');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -21,6 +23,7 @@ export const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit, isSubm
   const [showPoll, setShowPoll] = useState(false);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
+  const [dragOver, setDragOver] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -34,12 +37,17 @@ export const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit, isSubm
     localStorage.setItem(DRAFT_KEY, content);
   }, [content]);
 
+  const handleFilePicked = (file: File) => {
+    setMediaFile(file);
+    if (file.type.startsWith("audio")) setMediaType("audio");
+    else if (file.type.startsWith("video")) setMediaType("video");
+    else setMediaType("image");
+    setMediaPreview(URL.createObjectURL(file));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setMediaFile(file);
-      setMediaType(file.type.startsWith("video") ? 'video' : 'image');
-      setMediaPreview(URL.createObjectURL(file));
+      handleFilePicked(e.target.files[0]);
     }
   };
 
@@ -88,6 +96,7 @@ export const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit, isSubm
     const validPollOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
     const hasPoll = showPoll && pollQuestion.trim() && validPollOptions.length >= 2;
     if (!content.trim() && !mediaFile && !hasPoll) return;
+    if (content.length > MAX_CHARS) return;
     
     // We pass the data up to the parent HomePage to handle the API call logic if preferred,
     // or handle it here. Assuming parent handles the API post-processing or we do it here.
@@ -120,18 +129,54 @@ export const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit, isSubm
 
   const validPollOptions = pollOptions.map((o) => o.trim()).filter(Boolean);
   const canPostPoll = showPoll && pollQuestion.trim().length > 0 && validPollOptions.length >= 2;
-  const canSubmit = !!content.trim() || !!mediaFile || canPostPoll;
+  const charsLeft = MAX_CHARS - content.length;
+  const canSubmit = (!!content.trim() || !!mediaFile || canPostPoll) && charsLeft >= 0;
 
   return (
-    <div className="mb-8 professional-panel p-5 relative z-20 bg-slate-900/75 border-slate-700">
+    <div
+      className={`mb-8 professional-panel p-5 relative z-20 bg-slate-900/75 border-slate-700 transition-colors ${dragOver ? "ring-2 ring-blue-500/60 border-blue-500/60" : ""}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) handleFilePicked(file);
+      }}
+    >
       <div className="flex gap-4">
         <div className="flex-1">
+          <div className="mb-3 flex flex-wrap gap-2">
+            {quickTemplates.map((template) => (
+              <button
+                key={template}
+                type="button"
+                onClick={() => setContent((prev) => (prev ? `${prev}\n${template} ` : `${template} `))}
+                className="text-xs rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-slate-300 hover:border-blue-500/40"
+              >
+                {template}
+              </button>
+            ))}
+          </div>
           <Textarea 
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => setContent(e.target.value.slice(0, MAX_CHARS))}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                if (canSubmit && !isSubmitting) handleSubmit();
+              }
+            }}
             placeholder="What's your secret?" 
             className="min-h-[110px] border-none bg-transparent resize-none focus-visible:ring-0 p-0 text-lg placeholder:text-slate-500 text-slate-100"
           />
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-slate-500">Tip: Press Cmd/Ctrl + Enter to post</span>
+            <span className={charsLeft < 80 ? "text-amber-400" : "text-slate-500"}>{charsLeft} chars left</span>
+          </div>
           
           {mediaPreview && (
             <div className="relative mt-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 inline-block">
@@ -141,7 +186,7 @@ export const CreatePostForm: React.FC<CreatePostFormProps> = ({ onSubmit, isSubm
               {mediaType === 'image' ? (
                 <img src={mediaPreview} alt="Preview" className="h-40 w-auto object-cover" />
               ) : mediaType === 'video' ? (
-                <video controls src={mediaPreview} className="h-40 w-auto object-cover rounded-xl" />
+                <video controls autoPlay muted loop playsInline preload="metadata" src={mediaPreview} className="h-40 w-auto object-cover rounded-xl" />
               ) : (
                 <audio controls src={mediaPreview} className="min-w-[200px]" />
               )}

@@ -215,11 +215,12 @@ io.on("connection", (socket) => {
     });
 
     // ================== WEBRTC SIGNAL RELAY ==================
-    socket.on("callUser", ({ userToCall, signalData, from }) => {
+    socket.on("callUser", ({ userToCall, signalData, from, mode }) => {
         if (!userToCall || !signalData || !from) return;
         io.to(userToCall).emit("callUser", {
             signal: signalData,
-            from
+            from,
+            mode
         });
     });
 
