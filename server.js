@@ -29,12 +29,20 @@ app.use(express.json());
 
 const corsOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
   .split(",")
-  .map((v) => v.trim())
+  .map((v) => v.trim().replace(/\/+$/, ""))
   .filter(Boolean);
+
+const corsOriginChecker = (origin, callback) => {
+  // Allow non-browser clients (no Origin header)
+  if (!origin) return callback(null, true);
+  const normalized = String(origin).replace(/\/+$/, "");
+  if (corsOrigins.includes(normalized)) return callback(null, true);
+  return callback(new Error("Not allowed by CORS"));
+};
 
 // Allow frontend to talk to backend
 app.use(cors({
-    origin: corsOrigins,
+    origin: corsOriginChecker,
     credentials: true
 }));
 
