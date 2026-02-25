@@ -125,17 +125,18 @@ CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret  
 GEMINI_API_KEY=xxx
 
-Database Profiles (Same Atlas Cluster)
+Local Run (Single DB)
 
-You can keep isolated datasets and switch quickly:
+- Use one DB only via `MONGO_DB_NAME`.
+- Start backend: `npm run dev`
+- Start frontend:
+  - `cd frontendWhispernet`
+  - `npm run dev`
 
-- `MONGO_DB_NAME_BETA` for public beta testing (recommended)
-- `MONGO_DB_NAME_TEST` for internal testing
+Recommended local frontend env in `frontendWhispernet`:
 
-Run backend with a target:
-
-- Beta: `npm run dev:beta` or `DB_TARGET=beta node server.js`
-- Test: `npm run dev:test` or `DB_TARGET=test node server.js`
+- `VITE_API_URL=http://localhost:5001`
+- `VITE_SOCKET_URL=http://localhost:5001`
 
 --------------------------------------------------
 

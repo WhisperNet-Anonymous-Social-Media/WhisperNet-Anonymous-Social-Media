@@ -4,11 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "dev:beta": "DB_TARGET=beta nodemon server.js",
-    "dev:test": "DB_TARGET=test nodemon server.js",
     "start": "node server.js",
-    "start:beta": "DB_TARGET=beta node server.js",
-    "start:test": "DB_TARGET=test node server.js",
     "db:fresh": "node scripts/resetAndSeedAdmin.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
