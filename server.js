@@ -27,9 +27,14 @@ require("./cron/toxicCleanupCron");
 const app = express();
 app.use(express.json());
 
+const corsOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean);
+
 // Allow frontend to talk to backend
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: corsOrigins,
     credentials: true
 }));
 
@@ -186,7 +191,7 @@ app.use('/api/posts', postRoutes);
 const PORT = process.env.PORT || 5001;
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: ["http://localhost:5173", "null"], methods: ["GET", "POST"] },
+    cors: { origin: corsOrigins, methods: ["GET", "POST"] },
     pingInterval: 15000,
     pingTimeout: 60000,
     connectionStateRecovery: {

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:5001"; // Ensure this matches your backend PORT
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5001";
 let sharedSocket: Socket | null = null;
 let subscribers = 0;
 
