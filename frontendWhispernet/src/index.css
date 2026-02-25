@@ -1,0 +1,89 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 210 40% 96%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 215 92% 54%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 222 35% 18%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 222 28% 17%;
+    --muted-foreground: 215 20% 66%;
+    --accent: 197 92% 50%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 70% 54%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 27% 22%;
+    --input: 222 27% 24%;
+    --ring: 215 92% 54%;
+    --radius: 1rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Manrope", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    letter-spacing: -0.005em;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.02em;
+  }
+}
+
+.animated-bg {
+  background:
+    radial-gradient(at 0% 0%, hsla(215, 92%, 54%, 0.08) 0, transparent 46%),
+    radial-gradient(at 80% 15%, hsla(197, 92%, 50%, 0.07) 0, transparent 40%),
+    radial-gradient(at 50% 100%, hsla(214, 45%, 67%, 0.12) 0, transparent 50%);
+  background-size: 200% 200%;
+  animation: gradient-move 24s ease-in-out infinite;
+}
+
+@keyframes gradient-move {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.glass {
+  @apply bg-slate-900/80 backdrop-blur-2xl border border-slate-700 shadow-[0_18px_40px_-24px_rgba(2,6,23,0.75)];
+}
+.glass-card {
+  @apply bg-slate-900/90 backdrop-blur-xl border border-slate-700 shadow-[0_24px_48px_-28px_rgba(2,6,23,0.8)] transition-all duration-300;
+}
+
+.EmojiPickerReact {
+    --epr-bg-color: #09090b !important;
+    --epr-category-label-bg-color: #09090b !important;
+    --epr-text-color: #fafafa !important;
+    border-color: #27272a !important;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif !important;
+    z-index: 50;
+}
+
+.professional-panel {
+  @apply rounded-2xl border border-slate-700 bg-slate-900/90 backdrop-blur-xl shadow-[0_24px_42px_-28px_rgba(2,6,23,0.85)];
+}
+
+.soft-divider {
+  @apply border-t border-slate-700;
+}
+
+*::selection {
+  background: rgba(37, 99, 235, 0.18);
+}
