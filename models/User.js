@@ -4,7 +4,8 @@ const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    pseudonym: { type: String, unique: true },
+    // Sparse unique: allow many unverified users without pseudonym, enforce uniqueness once set.
+    pseudonym: { type: String, unique: true, sparse: true },
     verified: { type: Boolean, default: false },
     
     // ✅ Added OTP Fields (Critical for Auth)
