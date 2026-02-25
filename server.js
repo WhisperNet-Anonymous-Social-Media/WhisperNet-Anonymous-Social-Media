@@ -78,23 +78,37 @@ app.get("/protected", authMiddleware, (req, res) => {
 
 // ================== AUTH ROUTES ==================
 app.post('/register', async (req, res) => {
-    const { name, email, password } = req.body;
+    const name = String(req.body?.name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
     if (!name || !email || !password) return res.status(400).send('Please fill all fields.');
 
     try {
         const existingUser = await User.findOne({ email });
-        if (existingUser) return res.status(400).send("Email already registered");
-
-        const hashedPassword = await bcrypt.hash(password, 10);
         const otp = generateOTP();
-        const user = new User({
-            name,
-            email,
-            password: hashedPassword,
-            verified: false,
-            otp,
-            otpExpires: Date.now() + 5 * 60 * 1000
-        });
+        let user;
+
+        if (existingUser) {
+            if (existingUser.verified) {
+                return res.status(400).send("Email already registered");
+            }
+
+            // Allow retry for unverified accounts: reset password + OTP and resend.
+            existingUser.name = name;
+            existingUser.password = await bcrypt.hash(password, 10);
+            existingUser.otp = otp;
+            existingUser.otpExpires = Date.now() + 5 * 60 * 1000;
+            user = existingUser;
+        } else {
+            user = new User({
+                name,
+                email,
+                password: await bcrypt.hash(password, 10),
+                verified: false,
+                otp,
+                otpExpires: Date.now() + 5 * 60 * 1000
+            });
+        }
         await user.save();
 
         await transporter.sendMail({
@@ -104,7 +118,7 @@ app.post('/register', async (req, res) => {
             text: `Your OTP is ${otp}. It is valid for 5 minutes.`
         });
 
-        res.status(201).send("User registered. OTP sent to your email.");
+        res.status(201).send("OTP sent to your email.");
     } catch (error) {
         res.status(500).send("Error registering user: " + error.message);
     }
