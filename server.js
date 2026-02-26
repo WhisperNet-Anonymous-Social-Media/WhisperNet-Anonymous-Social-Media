@@ -53,11 +53,9 @@ app.use(cors({
     credentials: true
 }));
 
-// VERY IMPORTANT — allow preflight
-app.options("*", cors({
-    origin: corsOriginChecker,
-    credentials: true
-}));
+app.options("/*", (req, res) => {
+    res.sendStatus(204);
+});
 
 // Routes
 app.use("/api/ai", aiRoutes);
