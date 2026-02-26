@@ -27,21 +27,34 @@ require("./cron/toxicCleanupCron");
 const app = express();
 app.use(express.json());
 
-const corsOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000", "https://whispernet-anonymous-social-media-nhij.onrender.com")
+const corsOrigins = (
+    process.env.CORS_ORIGINS ||
+    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,https://profound-cascaron-7aa5eb.netlify.app"
+)
     .split(",")
     .map((v) => v.trim().replace(/\/+$/, ""))
     .filter(Boolean);
 
 const corsOriginChecker = (origin, callback) => {
-    // Allow non-browser clients (no Origin header)
     if (!origin) return callback(null, true);
+
     const normalized = String(origin).replace(/\/+$/, "");
-    if (corsOrigins.includes(normalized)) return callback(null, true);
+
+    if (corsOrigins.includes(normalized)) {
+        return callback(null, true);
+    }
+
+    console.log("Blocked by CORS:", origin);
     return callback(new Error("Not allowed by CORS"));
 };
 
-// Allow frontend to talk to backend
 app.use(cors({
+    origin: corsOriginChecker,
+    credentials: true
+}));
+
+// VERY IMPORTANT — allow preflight
+app.options("*", cors({
     origin: corsOriginChecker,
     credentials: true
 }));
