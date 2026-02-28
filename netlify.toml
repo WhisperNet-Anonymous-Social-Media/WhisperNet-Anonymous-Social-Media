@@ -1,7 +1,7 @@
-﻿[build]
+[build]
   base = "frontendWhispernet"
   command = "npm ci && npm run build"
-  publish = "dist"
+  publish = "frontendWhispernet/dist"
 
 [[redirects]]
   from = "/*"
