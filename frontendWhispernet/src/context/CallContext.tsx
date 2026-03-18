@@ -116,7 +116,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [socket, callContact, user, hardCleanup]);
 
   const startCallInternal = useCallback(async (contact: string, mode: "voice" | "video") => {
-    if (!socket || !user?.pseudonym || !contact) return;
+    if (!socket) {
+      toast.error("Unable to start call: not connected");
+      return;
+    }
+    if (!user?.pseudonym) {
+      toast.error("You must be logged in to call");
+      return;
+    }
+    if (!contact) {
+      toast.error("No contact selected");
+      return;
+    }
     if (startInFlightRef.current || isInCall || incomingCallRef.current) return;
     try {
       startInFlightRef.current = true;
@@ -361,7 +372,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           endCall(true);
         }}
-        onMinimize={() => setIsCallModalOpen(false)}
       />
     </CallContext.Provider>
   );

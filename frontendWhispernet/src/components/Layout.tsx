@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from '@/context/AuthContext';
 import { VibeWidget } from './VibeWidget';
 import { cn } from '@/lib/utils';
-import { CallFloatingDock } from './CallFloatingDock';
 
 export const Layout: React.FC = () => {
   const { logout, user } = useAuth();
@@ -70,7 +69,6 @@ export const Layout: React.FC = () => {
             <Outlet />
         </div>
       </main>
-      <CallFloatingDock />
     </div>
   );
 };
