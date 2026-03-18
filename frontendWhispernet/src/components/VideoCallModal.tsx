@@ -24,15 +24,25 @@ function drawVideoToCanvas(
   if (!ctx) return () => { };
 
   let frameId = 0;
+
   const render = () => {
     if (!isActive()) return;
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+
+    // Mobile fix: Check if video is actually ready and has dimensions
+    if (video.readyState >= 2 && video.videoWidth > 0) {
+      // Ensure canvas matches video aspect ratio
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+
       ctx.filter = `blur(${blurPx}px)`;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.filter = "none";
+    } else {
+      // If video isn't ready, clear canvas or show loading
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
+
     frameId = requestAnimationFrame(render);
   };
 
@@ -113,12 +123,16 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   }, [remoteStream]);
 
   // Canvas Drawing Logic
+  // Inside VideoCallModal.tsx
   useEffect(() => {
     if (isVoiceOnly || !open || !localVideoRef.current || !localCanvasRef.current || !localReady) return;
     let active = true;
-    const stopLocal = drawVideoToCanvas(localVideoRef.current, localCanvasRef.current, blur, () => active);
+
+    // CHANGE: Set blur to 0 for local view so YOU are not blurred
+    const stopLocal = drawVideoToCanvas(localVideoRef.current, localCanvasRef.current, 0, () => active);
+
     return () => { active = false; stopLocal(); };
-  }, [open, blur, localReady, isVoiceOnly]);
+  }, [open, localReady, isVoiceOnly]); // Removed 'blur' from dependencies
 
   useEffect(() => {
     if (isVoiceOnly || !open || !remoteVideoRef.current || !remoteCanvasRef.current || !remoteReady) return;
@@ -166,7 +180,11 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               </div>
             ) : (
               <>
-                <canvas ref={localCanvasRef} className="w-full h-full object-cover scale-x-[-1]" />
+                <canvas
+                  ref={localCanvasRef}
+                  className="w-full h-full object-cover block mx-auto scale-x-[-1]"
+                  style={{ minHeight: '100%' }}
+                />
                 {!localReady && (
                   <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                     <Loader2 className="w-6 h-6 text-slate-600 animate-spin" />
@@ -199,7 +217,11 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               </div>
             ) : (
               <>
-                <canvas ref={remoteCanvasRef} className="w-full h-full object-cover" />
+                <canvas
+                  ref={remoteCanvasRef}
+                  className="w-full h-full object-cover block mx-auto"
+                  style={{ minHeight: '100%' }}
+                />
                 {!remoteReady && (
                   <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                     <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
