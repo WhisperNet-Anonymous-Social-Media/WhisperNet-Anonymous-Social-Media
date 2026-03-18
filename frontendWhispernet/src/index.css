@@ -74,26 +74,30 @@
   }
 }
 
-/* 2. Premium Glass Utilities - Fixed for Netlify/PostCSS Build */
+/* 2. Premium Glass Utilities - Bulletproof Version */
 .glass {
   background-color: rgba(2, 6, 23, 0.45);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
-  /* REMOVED ALL SPACES INSIDE THE BRACKETS */
-  @apply border border-white/10 shadow-[0_8px_32px_0_rgba(0, 0, 0, 0.5)];
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* Moving shadow to standard CSS to bypass Tailwind build errors */
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
 }
 
 .glass-card {
   background-color: rgba(15, 23, 42, 0.4);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
-  /* REMOVED ALL SPACES INSIDE THE BRACKETS */
-  @apply border border-white/10 shadow-[0_20px_50px_rgba(0, 0, 0, 0.4)] transition-all duration-500;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* Standard CSS shadow */
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  transition: all 500ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
   background-color: rgba(15, 23, 42, 0.5);
-  @apply border-white/20 -translate-y-1;
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-4px);
 }
 
 /* 3. The "Shimmer" Border effect */
