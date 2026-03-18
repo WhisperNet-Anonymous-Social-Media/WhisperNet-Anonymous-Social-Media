@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { PhoneOff, PhoneCall } from "lucide-react";
+import { PhoneOff, PhoneCall, ShieldCheck, Loader2 } from "lucide-react";
 
 interface VideoCallModalProps {
   open: boolean;
@@ -21,7 +21,7 @@ function drawVideoToCanvas(
   isActive: () => boolean
 ) {
   const ctx = canvas.getContext("2d");
-  if (!ctx) return () => {};
+  if (!ctx) return () => { };
 
   let frameId = 0;
   const render = () => {
@@ -63,145 +63,191 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const displayName = useMemo(() => contact || "Unknown", [contact]);
   const isVoiceOnly = mode === "voice";
 
+  // Reset state on open
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setLocalReady(false);
+      setRemoteReady(false);
+      return;
+    }
     setBlur(20);
-    setLocalReady(false);
-    setRemoteReady(false);
   }, [open]);
 
-  // Reduce blur by 1px every 5 seconds.
+  // Gradual unblur logic (Social feature)
   useEffect(() => {
-    if (!open) return;
+    if (!open || remoteStream === null) return;
     const interval = setInterval(() => {
       setBlur((prev) => Math.max(0, prev - 1));
     }, 5000);
     return () => clearInterval(interval);
-  }, [open]);
+  }, [open, remoteStream]);
 
+  // Handle Local Stream
   useEffect(() => {
     if (!localVideoRef.current || !localStream) return;
     localVideoRef.current.srcObject = localStream;
-    localVideoRef.current.muted = true;
+    localVideoRef.current.muted = true; // Essential to prevent feedback loop
+
     localVideoRef.current.onloadedmetadata = () => {
       setLocalReady(true);
-      localVideoRef.current?.play().catch(() => {});
+      localVideoRef.current?.play().catch(console.error);
     };
-    localVideoRef.current.play().catch(() => {});
   }, [localStream]);
 
+  // Handle Remote Stream (Video & Audio)
   useEffect(() => {
-    if (!remoteVideoRef.current || !remoteStream) return;
-    remoteVideoRef.current.srcObject = remoteStream;
-    remoteVideoRef.current.onloadedmetadata = () => {
-      setRemoteReady(true);
-      remoteVideoRef.current?.play().catch(() => {});
-    };
-    remoteVideoRef.current.play().catch(() => {});
+    if (!remoteStream) return;
+
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      remoteVideoRef.current.onloadedmetadata = () => {
+        setRemoteReady(true);
+        remoteVideoRef.current?.play().catch(console.error);
+      };
+    }
+
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = remoteStream;
+      remoteAudioRef.current.play().catch(console.error);
+    }
   }, [remoteStream]);
 
-  // Voice calls can fail to play if only a hidden video element is used.
+  // Canvas Drawing Logic
   useEffect(() => {
-    if (!remoteAudioRef.current || !remoteStream) return;
-    remoteAudioRef.current.srcObject = remoteStream;
-    remoteAudioRef.current.play().catch(() => {});
-  }, [remoteStream]);
-
-  useEffect(() => {
-    if (isVoiceOnly) return;
-    if (!open || !localVideoRef.current || !localCanvasRef.current || !localReady) return;
+    if (isVoiceOnly || !open || !localVideoRef.current || !localCanvasRef.current || !localReady) return;
     let active = true;
     const stopLocal = drawVideoToCanvas(localVideoRef.current, localCanvasRef.current, blur, () => active);
-    return () => {
-      active = false;
-      stopLocal();
-    };
+    return () => { active = false; stopLocal(); };
   }, [open, blur, localReady, isVoiceOnly]);
 
   useEffect(() => {
-    if (isVoiceOnly) return;
-    if (!open || !remoteVideoRef.current || !remoteCanvasRef.current || !remoteReady) return;
+    if (isVoiceOnly || !open || !remoteVideoRef.current || !remoteCanvasRef.current || !remoteReady) return;
     let active = true;
     const stopRemote = drawVideoToCanvas(remoteVideoRef.current, remoteCanvasRef.current, blur, () => active);
-    return () => {
-      active = false;
-      stopRemote();
-    };
+    return () => { active = false; stopRemote(); };
   }, [open, blur, remoteReady, isVoiceOnly]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-5xl rounded-3xl border border-slate-700 bg-slate-900/95 shadow-2xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-slate-500">{isVoiceOnly ? "Encrypted Voice Call" : "Encrypted Video Call"}</p>
-            <h3 className="text-lg font-semibold text-slate-100">
-              {isIncoming ? `Incoming call from ${displayName}` : `Call with ${displayName}`}
-            </h3>
+    <div className="fixed inset-0 z-[120] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="w-full max-w-4xl rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl overflow-hidden flex flex-col">
+
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-500/10 rounded-full">
+              <ShieldCheck className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
+                {isVoiceOnly ? "Secure Audio" : "Secure Video"}
+              </p>
+              <h3 className="text-lg font-semibold text-slate-100">
+                {isIncoming && !remoteStream ? `Incoming from ${displayName}` : `Chatting with ${displayName}`}
+              </h3>
+            </div>
           </div>
-          <div className="text-xs text-blue-300 bg-blue-950/35 border border-blue-500/40 px-3 py-1 rounded-full">
-            Blur: {blur}px
-          </div>
+          {!isVoiceOnly && remoteStream && (
+            <div className="text-xs font-mono text-blue-300 bg-blue-950/40 border border-blue-500/30 px-3 py-1 rounded-full animate-pulse">
+              Privacy Blur: {blur}px
+            </div>
+          )}
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4 p-4 bg-slate-950">
-          <div className="rounded-2xl border border-slate-700 overflow-hidden bg-slate-900 relative min-h-[240px]">
+        {/* Video/Voice Grid */}
+        <div className="grid md:grid-cols-2 gap-4 p-6 bg-slate-950 flex-grow">
+          {/* Local Participant */}
+          <div className="relative rounded-2xl border border-slate-800 overflow-hidden bg-slate-900 aspect-video md:aspect-auto min-h-[200px]">
             {isVoiceOnly ? (
-              <div className="absolute inset-0 grid place-items-center text-slate-300 text-sm">Voice call in progress</div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3">
+                <div className="w-16 h-16 rounded-full bg-slate-800 animate-pulse" />
+                <span className="text-slate-400 text-sm font-medium">Your Audio Active</span>
+              </div>
             ) : (
               <>
-                <canvas ref={localCanvasRef} className="w-full h-full object-cover" />
+                <canvas ref={localCanvasRef} className="w-full h-full object-cover scale-x-[-1]" />
                 {!localReady && (
-                  <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">Starting camera...</div>
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                    <Loader2 className="w-6 h-6 text-slate-600 animate-spin" />
+                  </div>
                 )}
               </>
             )}
-            <span className="absolute bottom-2 left-2 text-xs bg-slate-900/90 text-slate-300 px-2 py-1 rounded border border-slate-700">
-              You
-            </span>
+            <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[10px] text-white border border-white/10">
+              You (Local)
+            </div>
           </div>
-          <div className="rounded-2xl border border-slate-700 overflow-hidden bg-slate-900 relative min-h-[240px]">
-            {isVoiceOnly ? (
-              <div className="absolute inset-0 grid place-items-center text-slate-300 text-sm">Connected to {displayName}</div>
+
+          {/* Remote Participant */}
+          <div className="relative rounded-2xl border border-slate-800 overflow-hidden bg-slate-900 aspect-video md:aspect-auto min-h-[200px]">
+            {!remoteStream ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 p-6 text-center">
+                <div className="w-20 h-20 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <PhoneCall className="w-8 h-8 text-blue-500 animate-bounce" />
+                </div>
+                <p className="text-slate-300 font-medium">
+                  {isIncoming ? "Waiting for you to join..." : "Connecting to peer..."}
+                </p>
+              </div>
+            ) : isVoiceOnly ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500 animate-ping opacity-50" />
+                </div>
+                <span className="text-emerald-400 text-sm font-medium">Connected</span>
+              </div>
             ) : (
               <>
                 <canvas ref={remoteCanvasRef} className="w-full h-full object-cover" />
                 {!remoteReady && (
-                  <div className="absolute inset-0 grid place-items-center text-xs text-slate-500">Waiting for remote video...</div>
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                    <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                  </div>
                 )}
               </>
             )}
-            <span className="absolute bottom-2 left-2 text-xs bg-slate-900/90 text-slate-300 px-2 py-1 rounded border border-slate-700">
+            <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[10px] text-white border border-white/10">
               {displayName}
-            </span>
+            </div>
           </div>
         </div>
 
-        <div className="px-4 pb-4 flex items-center justify-center gap-3">
+        {/* Controls */}
+        <div className="px-6 py-6 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-4">
+          {isIncoming && !remoteStream && (
+            <Button
+              onClick={onAnswer}
+              size="lg"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-full px-8 h-12 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
+            >
+              <PhoneCall className="w-5 h-5 mr-2" />
+              Answer Call
+            </Button>
+          )}
+
+          <Button
+            onClick={onEnd}
+            variant="destructive"
+            size="lg"
+            className="rounded-full px-8 h-12 shadow-lg shadow-red-900/20 transition-all active:scale-95"
+          >
+            <PhoneOff className="w-5 h-5 mr-2" />
+            {isIncoming && !remoteStream ? "Decline" : "End Call"}
+          </Button>
+
           {onMinimize && (
-            <Button onClick={onMinimize} variant="secondary">
+            <Button onClick={onMinimize} variant="ghost" className="text-slate-400 hover:text-white">
               Minimize
             </Button>
           )}
-          {isIncoming && (
-            <Button onClick={onAnswer} className="bg-emerald-600 hover:bg-emerald-500 text-white">
-              <PhoneCall className="w-4 h-4 mr-2" />
-              Answer
-            </Button>
-          )}
-          <Button onClick={onEnd} variant="destructive">
-            <PhoneOff className="w-4 h-4 mr-2" />
-            End Call
-          </Button>
         </div>
-      </div>
 
-      {/* Hidden video elements used as canvas sources */}
-      <video ref={localVideoRef} muted playsInline autoPlay className="hidden" />
-      <video ref={remoteVideoRef} playsInline autoPlay className="hidden" />
-      <audio ref={remoteAudioRef} autoPlay className="hidden" />
+        {/* Media Engines (Hidden) */}
+        <video ref={localVideoRef} muted playsInline autoPlay className="hidden" />
+        <video ref={remoteVideoRef} playsInline autoPlay className="hidden" />
+        <audio ref={remoteAudioRef} autoPlay className="hidden" />
+      </div>
     </div>
   );
 };

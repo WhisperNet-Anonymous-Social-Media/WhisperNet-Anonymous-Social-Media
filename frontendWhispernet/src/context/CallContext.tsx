@@ -26,6 +26,26 @@ type CallContextType = {
   closeCallModal: () => void;
 };
 
+// Metered.ca Free Open Relay Config
+const ICE_SERVERS = [
+  { urls: "stun:openrelay.metered.ca:80" },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turns:openrelay.metered.ca:443?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+];
+
 const CallContext = createContext<CallContextType | undefined>(undefined);
 
 export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -69,30 +89,43 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "sine";
-        osc.frequency.value = 900;
-        gain.gain.value = 0.035;
+        osc.frequency.value = 400; // Lower frequency for a nicer ringtone
+        gain.gain.value = 0.05;
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start();
         setTimeout(() => {
           osc.stop();
           ctx.close();
-        }, 180);
-      } catch (_) {}
-    }, 1100);
+        }, 500);
+      } catch (_) { }
+    }, 1500);
   }, [stopRinging]);
 
   const getLocalStream = useCallback(async (mode: "voice" | "video") => {
-    if (localStream) return localStream;
-    const stream = await navigator.mediaDevices.getUserMedia({ video: mode === "video", audio: true });
-    setLocalStream(stream);
-    return stream;
-  }, [localStream]);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: mode === "video",
+        audio: true
+      });
+      setLocalStream(stream);
+      return stream;
+    } catch (err) {
+      toast.error("Camera/Microphone access denied");
+      throw err;
+    }
+  }, []);
 
   const hardCleanup = useCallback(() => {
     stopRinging();
-    peerRef.current?.destroy();
-    peerRef.current = null;
+    if (peerRef.current) {
+      peerRef.current.destroy();
+      peerRef.current = null;
+    }
+    if (localStream) {
+      localStream.getTracks().forEach((track) => track.stop());
+      setLocalStream(null);
+    }
     setRemoteStream(null);
     setIncomingCall(null);
     incomingCallRef.current = null;
@@ -101,10 +134,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsInCall(false);
     pendingSignalsRef.current = [];
     startInFlightRef.current = false;
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-      setLocalStream(null);
-    }
   }, [localStream, stopRinging]);
 
   const endCall = useCallback((notifyPeer = true) => {
@@ -116,19 +145,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [socket, callContact, user, hardCleanup]);
 
   const startCallInternal = useCallback(async (contact: string, mode: "voice" | "video") => {
-    if (!socket) {
-      toast.error("Unable to start call: not connected");
-      return;
-    }
-    if (!user?.pseudonym) {
-      toast.error("You must be logged in to call");
-      return;
-    }
-    if (!contact) {
-      toast.error("No contact selected");
+    if (!socket?.connected) {
+      toast.error("Socket not connected. Please refresh.");
       return;
     }
     if (startInFlightRef.current || isInCall || incomingCallRef.current) return;
+
     try {
       startInFlightRef.current = true;
       const stream = await getLocalStream(mode);
@@ -140,9 +162,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initiator: true,
         trickle: true,
         stream,
-        config: {
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-        },
+        config: { iceServers: ICE_SERVERS },
       });
 
       peer.on("signal", (signalData: any) => {
@@ -150,13 +170,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
           socket.emit("callUser", {
             userToCall: contact,
             signalData,
-            from: user.pseudonym,
+            from: user?.pseudonym,
             mode,
           });
-          return;
-        }
-        if (signalData?.candidate) {
-          socket.emit("iceCandidate", { to: contact, candidate: signalData, from: user.pseudonym });
+        } else {
+          // Relays candidates and other negotiation signals
+          socket.emit("iceCandidate", { to: contact, candidate: signalData, from: user?.pseudonym });
         }
       });
 
@@ -165,12 +184,16 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsInCall(true);
       });
 
-      peer.on("error", () => endCall(false));
+      peer.on("error", (err: any) => {
+        console.error("Peer error:", err);
+        endCall(false);
+      });
+
       peer.on("close", () => endCall(false));
 
       peerRef.current = peer;
     } catch (err: any) {
-      toast.error(err?.message || "Could not start call");
+      console.error(err);
       endCall(false);
     } finally {
       startInFlightRef.current = false;
@@ -181,9 +204,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await startCallInternal(contact, "voice");
   }, [startCallInternal]);
 
-  const startVideoCall = useCallback(async (_contact: string) => {
-    toast.info("Video call is coming soon. Use voice call for now.");
-  }, []);
+  const startVideoCall = useCallback(async (contact: string) => {
+    await startCallInternal(contact, "video");
+  }, [startCallInternal]);
 
   const startCall = useCallback(async (contact: string) => {
     await startVoiceCall(contact);
@@ -192,6 +215,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const answerCall = useCallback(async () => {
     const activeIncoming = incomingCallRef.current || incomingCall;
     if (!socket || !user?.pseudonym || !activeIncoming) return;
+
     try {
       const stream = await getLocalStream(callMode);
 
@@ -199,9 +223,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         initiator: false,
         trickle: true,
         stream,
-        config: {
-          iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-        },
+        config: { iceServers: ICE_SERVERS },
       });
 
       peer.on("signal", (signalData: any) => {
@@ -211,9 +233,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
             signal: signalData,
             from: user.pseudonym,
           });
-          return;
-        }
-        if (signalData?.candidate) {
+        } else {
           socket.emit("iceCandidate", { to: activeIncoming.from, candidate: signalData, from: user.pseudonym });
         }
       });
@@ -229,11 +249,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       peer.signal(activeIncoming.signal);
       peerRef.current = peer;
 
+      // Handle any candidates that arrived before the peer was ready
       if (pendingSignalsRef.current.length) {
         pendingSignalsRef.current.forEach((sig) => {
-          try {
-            peer.signal(sig);
-          } catch (_) {}
+          try { peer.signal(sig); } catch (_) { }
         });
         pendingSignalsRef.current = [];
       }
@@ -244,13 +263,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsCallModalOpen(true);
       stopRinging();
     } catch (err: any) {
-      toast.error(err?.message || "Could not answer call");
-      setIncomingCall(null);
-      incomingCallRef.current = null;
-      setIsCallModalOpen(false);
-      stopRinging();
+      toast.error("Could not answer call");
+      hardCleanup();
     }
-  }, [socket, user, incomingCall, getLocalStream, callMode, endCall, createPeer, stopRinging]);
+  }, [socket, user, incomingCall, getLocalStream, callMode, endCall, createPeer, stopRinging, hardCleanup]);
 
   const declineCall = useCallback(() => {
     const activeIncoming = incomingCallRef.current || incomingCall;
@@ -263,23 +279,33 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     stopRinging();
   }, [socket, incomingCall, user, stopRinging]);
 
+  // CRITICAL: Ensure room re-entry on socket reconnection
   useEffect(() => {
     if (!socket || !user?.pseudonym) return;
-    socket.emit("join_chat", user.pseudonym);
+
+    const handleJoin = () => {
+      socket.emit("join_chat", user.pseudonym);
+    };
+
+    handleJoin();
+    socket.on("connect", handleJoin);
+
+    return () => {
+      socket.off("connect", handleJoin);
+    };
   }, [socket, user?.pseudonym]);
 
   useEffect(() => {
     if (!socket) return;
 
     const onIncomingCall = ({ from, signal, mode }: { from: string; signal: any; mode?: "voice" | "video" }) => {
-      if (isInCall) {
-        if (socket && user?.pseudonym) {
-          socket.emit("callDeclined", { to: from, from: user.pseudonym });
-        }
+      if (isInCall || incomingCallRef.current) {
+        socket.emit("callDeclined", { to: from, from: user?.pseudonym });
         return;
       }
-      setIncomingCall({ from, signal });
-      incomingCallRef.current = { from, signal };
+      const data = { from, signal };
+      setIncomingCall(data);
+      incomingCallRef.current = data;
       setCallContact(from);
       setCallMode(mode === "video" ? "video" : "voice");
       setIsCallModalOpen(true);
@@ -287,19 +313,18 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const onAnswered = ({ signal }: { signal: any }) => {
-      peerRef.current?.signal(signal);
-      setIsInCall(true);
-      setIsCallModalOpen(true);
-      stopRinging();
-      toast.success("Call connected");
+      if (peerRef.current) {
+        peerRef.current.signal(signal);
+        setIsInCall(true);
+        stopRinging();
+        toast.success("Call connected");
+      }
     };
 
     const onIceCandidate = ({ candidate }: { candidate: any }) => {
       if (!candidate) return;
       if (peerRef.current) {
-        try {
-          peerRef.current.signal(candidate);
-        } catch (_) {}
+        try { peerRef.current.signal(candidate); } catch (_) { }
       } else {
         pendingSignalsRef.current.push(candidate);
       }
@@ -308,13 +333,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const onEnded = () => {
       stopRinging();
       toast.info("Call ended");
-      endCall(false);
+      hardCleanup();
+      setIsCallModalOpen(false);
     };
 
     const onDeclined = ({ from }: { from: string }) => {
       stopRinging();
-      toast.info(`${from} declined your call`);
-      endCall(false);
+      toast.info(`${from} declined the call`);
+      hardCleanup();
+      setIsCallModalOpen(false);
     };
 
     socket.on("callUser", onIncomingCall);
@@ -330,13 +357,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off("endCall", onEnded);
       socket.off("callDeclined", onDeclined);
     };
-  }, [socket, answerCall, declineCall, endCall, isInCall, startRinging, stopRinging, user?.pseudonym]);
-
-  useEffect(() => {
-    return () => {
-      hardCleanup();
-    };
-  }, [hardCleanup]);
+  }, [socket, isInCall, user?.pseudonym, startRinging, stopRinging, hardCleanup]);
 
   return (
     <CallContext.Provider
@@ -368,9 +389,9 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         onEnd={() => {
           if (incomingCall && !isInCall) {
             declineCall();
-            return;
+          } else {
+            endCall(true);
           }
-          endCall(true);
         }}
       />
     </CallContext.Provider>

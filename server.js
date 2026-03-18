@@ -37,13 +37,10 @@ const corsOrigins = (
 
 const corsOriginChecker = (origin, callback) => {
     if (!origin) return callback(null, true);
-
     const normalized = String(origin).replace(/\/+$/, "");
-
     if (corsOrigins.includes(normalized)) {
         return callback(null, true);
     }
-
     console.log("Blocked by CORS:", origin);
     return callback(new Error("Not allowed by CORS"));
 };
@@ -110,8 +107,6 @@ app.post('/register', async (req, res) => {
             if (existingUser.verified) {
                 return res.status(400).send("Email already registered");
             }
-
-            // Allow retry for unverified accounts: reset password + OTP and resend.
             existingUser.name = name;
             existingUser.password = await bcrypt.hash(password, 10);
             existingUser.otp = otp;
@@ -150,7 +145,6 @@ app.post('/login', async (req, res) => {
     if (!user.verified) return res.status(403).send("Please verify your college email first.");
     if (user.isBanned) return res.status(403).send(user.bannedReason || "Account is banned");
 
-    // Update Online Status on Login
     user.isOnline = true;
     await user.save();
 
@@ -222,18 +216,16 @@ app.post("/auth/forgot-password/reset", async (req, res) => {
     }
 });
 
-
-// ================== POSTS ==================
 app.use('/posts', postRoutes);
 app.use('/api/posts', postRoutes);
 
-// ================== SOCKET.IO ==================
+// ================== SOCKET.IO SETUP ==================
 const PORT = process.env.PORT || 5001;
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: { origin: corsOrigins, methods: ["GET", "POST"] },
-    pingInterval: 15000,
-    pingTimeout: 60000,
+    pingInterval: 10000, // Faster ping to detect disconnections quicker
+    pingTimeout: 20000,
     connectionStateRecovery: {
         maxDisconnectionDuration: 2 * 60 * 1000,
         skipMiddlewares: true
@@ -244,28 +236,27 @@ io.on("connection", (socket) => {
     console.log("🟢 User connected:", socket.id);
     let connectedPseudonym = null;
 
-    // ✅ Handle Presence
     socket.on("join_chat", async (pseudonym) => {
         if (pseudonym) {
             connectedPseudonym = pseudonym;
             socket.join(pseudonym);
-            // Update DB
             await User.findOneAndUpdate({ pseudonym }, { isOnline: true });
-            // Broadcast to all clients
             io.emit("user_status", { pseudonym, isOnline: true });
+            console.log(`👤 ${pseudonym} is now online (Room joined)`);
         }
     });
 
     socket.on("join_room", (roomId) => {
         if (roomId) {
             socket.join(roomId);
-            console.log(`🧩 ${socket.id} joined room: ${roomId}`);
+            console.log(`🧩 Socket ${socket.id} joined room: ${roomId}`);
         }
     });
 
-    // ================== WEBRTC SIGNAL RELAY ==================
+    // ================== WEBRTC SIGNALING ==================
+    // 1. Initial Call Request
     socket.on("callUser", ({ userToCall, signalData, from, mode }) => {
-        if (!userToCall || !signalData || !from) return;
+        if (!userToCall || !signalData) return;
         io.to(userToCall).emit("callUser", {
             signal: signalData,
             from,
@@ -273,36 +264,33 @@ io.on("connection", (socket) => {
         });
     });
 
+    // 2. Call Response
     socket.on("answerCall", ({ to, signal, from }) => {
         if (!to || !signal) return;
-        io.to(to).emit("answerCall", {
-            signal,
-            from
-        });
+        io.to(to).emit("answerCall", { signal, from });
     });
 
+    // 3. ICE Candidate Relay (Crucial for TURN/STUN)
     socket.on("iceCandidate", ({ to, candidate, from }) => {
         if (!to || !candidate) return;
-        io.to(to).emit("iceCandidate", {
-            candidate,
-            from
-        });
+        io.to(to).emit("iceCandidate", { candidate, from });
     });
 
+    // 4. Decline/End Logic
     socket.on("callDeclined", ({ to, from }) => {
-        if (!to) return;
-        io.to(to).emit("callDeclined", { from });
+        if (to) io.to(to).emit("callDeclined", { from });
     });
 
     socket.on("endCall", ({ to, from }) => {
-        if (!to) return;
-        io.to(to).emit("endCall", { from });
+        if (to) io.to(to).emit("endCall", { from });
     });
 
-    // Handle manual offline (logout)
+    // ================== PRESENCE LOGIC ==================
     socket.on("go_offline", async (pseudonym) => {
-        await User.findOneAndUpdate({ pseudonym }, { isOnline: false, lastSeen: new Date() });
-        io.emit("user_status", { pseudonym, isOnline: false, lastSeen: new Date() });
+        if (!pseudonym) return;
+        const lastSeen = new Date();
+        await User.findOneAndUpdate({ pseudonym }, { isOnline: false, lastSeen });
+        io.emit("user_status", { pseudonym, isOnline: false, lastSeen });
     });
 
     socket.on("disconnect", () => {
