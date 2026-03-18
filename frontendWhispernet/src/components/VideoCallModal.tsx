@@ -20,7 +20,8 @@ function drawVideoToCanvas(
   blurPx: number,
   isActive: () => boolean
 ) {
-  const ctx = canvas.getContext("2d");
+  // alpha: false helps performance on mobile devices
+  const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return () => { };
 
   let frameId = 0;
@@ -28,19 +29,16 @@ function drawVideoToCanvas(
   const render = () => {
     if (!isActive()) return;
 
-    // Mobile fix: Check if video is actually ready and has dimensions
+    // readyState 2 means HAVE_CURRENT_DATA, necessary for mobile hardware
     if (video.readyState >= 2 && video.videoWidth > 0) {
-      // Ensure canvas matches video aspect ratio
       if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
       }
 
-      ctx.filter = `blur(${blurPx}px)`;
+      // Re-applying the filter inside the loop is critical for mobile Safari/Chrome
+      ctx.filter = blurPx > 0 ? `blur(${blurPx}px)` : "none";
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    } else {
-      // If video isn't ready, clear canvas or show loading
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
     frameId = requestAnimationFrame(render);
@@ -73,7 +71,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   const displayName = useMemo(() => contact || "Unknown", [contact]);
   const isVoiceOnly = mode === "voice";
 
-  // Reset state on open
+  // Reset states
   useEffect(() => {
     if (!open) {
       setLocalReady(false);
@@ -83,7 +81,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     setBlur(20);
   }, [open]);
 
-  // Gradual unblur logic (Social feature)
+  // Gradual unblur logic
   useEffect(() => {
     if (!open || remoteStream === null) return;
     const interval = setInterval(() => {
@@ -92,19 +90,19 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     return () => clearInterval(interval);
   }, [open, remoteStream]);
 
-  // Handle Local Stream
+  // Local Stream setup
   useEffect(() => {
     if (!localVideoRef.current || !localStream) return;
     localVideoRef.current.srcObject = localStream;
-    localVideoRef.current.muted = true; // Essential to prevent feedback loop
+    localVideoRef.current.muted = true;
 
     localVideoRef.current.onloadedmetadata = () => {
       setLocalReady(true);
-      localVideoRef.current?.play().catch(console.error);
+      localVideoRef.current?.play().catch(() => { });
     };
   }, [localStream]);
 
-  // Handle Remote Stream (Video & Audio)
+  // Remote Stream setup (Audio + Video)
   useEffect(() => {
     if (!remoteStream) return;
 
@@ -112,28 +110,25 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       remoteVideoRef.current.srcObject = remoteStream;
       remoteVideoRef.current.onloadedmetadata = () => {
         setRemoteReady(true);
-        remoteVideoRef.current?.play().catch(console.error);
+        remoteVideoRef.current?.play().catch(() => { });
       };
     }
 
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = remoteStream;
-      remoteAudioRef.current.play().catch(console.error);
+      remoteAudioRef.current.play().catch(() => { });
     }
   }, [remoteStream]);
 
-  // Canvas Drawing Logic
-  // Inside VideoCallModal.tsx
+  // Local Canvas (No Blur)
   useEffect(() => {
     if (isVoiceOnly || !open || !localVideoRef.current || !localCanvasRef.current || !localReady) return;
     let active = true;
-
-    // CHANGE: Set blur to 0 for local view so YOU are not blurred
     const stopLocal = drawVideoToCanvas(localVideoRef.current, localCanvasRef.current, 0, () => active);
-
     return () => { active = false; stopLocal(); };
-  }, [open, localReady, isVoiceOnly]); // Removed 'blur' from dependencies
+  }, [open, localReady, isVoiceOnly]);
 
+  // Remote Canvas (With Blur)
   useEffect(() => {
     if (isVoiceOnly || !open || !remoteVideoRef.current || !remoteCanvasRef.current || !remoteReady) return;
     let active = true;
@@ -144,7 +139,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[120] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4">
       <div className="w-full max-w-4xl rounded-3xl border border-slate-800 bg-slate-900 shadow-2xl overflow-hidden flex flex-col">
 
         {/* Header */}
@@ -157,73 +152,79 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
               <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
                 {isVoiceOnly ? "Secure Audio" : "Secure Video"}
               </p>
-              <h3 className="text-lg font-semibold text-slate-100">
+              <h3 className="text-lg font-semibold text-slate-100 leading-tight">
                 {isIncoming && !remoteStream ? `Incoming from ${displayName}` : `Chatting with ${displayName}`}
               </h3>
             </div>
           </div>
           {!isVoiceOnly && remoteStream && (
             <div className="text-xs font-mono text-blue-300 bg-blue-950/40 border border-blue-500/30 px-3 py-1 rounded-full animate-pulse">
-              Privacy Blur: {blur}px
+              Blur: {blur}px
             </div>
           )}
         </div>
 
-        {/* Video/Voice Grid */}
-        <div className="grid md:grid-cols-2 gap-4 p-6 bg-slate-950 flex-grow">
-          {/* Local Participant */}
-          <div className="relative rounded-2xl border border-slate-800 overflow-hidden bg-slate-900 aspect-video md:aspect-auto min-h-[200px]">
+        {/* Video Grid */}
+        <div className="grid md:grid-cols-2 gap-4 p-4 bg-slate-950 flex-grow">
+          {/* Local Participant (Self) */}
+          <div className="relative rounded-2xl border border-slate-800 overflow-hidden bg-slate-900 aspect-video md:aspect-auto min-h-[220px]">
             {isVoiceOnly ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3">
                 <div className="w-16 h-16 rounded-full bg-slate-800 animate-pulse" />
-                <span className="text-slate-400 text-sm font-medium">Your Audio Active</span>
+                <span className="text-slate-400 text-sm">Your Mic Active</span>
               </div>
             ) : (
               <>
                 <canvas
                   ref={localCanvasRef}
                   className="w-full h-full object-cover block mx-auto scale-x-[-1]"
-                  style={{ minHeight: '100%' }}
+                  style={{ minHeight: '100%', transform: 'translateZ(0)' }}
                 />
                 {!localReady && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                  <div className="absolute inset-0 flex items-center justify-center">
                     <Loader2 className="w-6 h-6 text-slate-600 animate-spin" />
                   </div>
                 )}
               </>
             )}
             <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/50 backdrop-blur-md rounded text-[10px] text-white border border-white/10">
-              You (Local)
+              You
             </div>
           </div>
 
-          {/* Remote Participant */}
-          <div className="relative rounded-2xl border border-slate-800 overflow-hidden bg-slate-900 aspect-video md:aspect-auto min-h-[200px]">
+          {/* Remote Participant (Stranger) */}
+          <div className="relative rounded-2xl border border-slate-800 overflow-hidden bg-slate-900 aspect-video md:aspect-auto min-h-[220px]">
             {!remoteStream ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 p-6 text-center">
-                <div className="w-20 h-20 rounded-full bg-blue-500/10 flex items-center justify-center">
-                  <PhoneCall className="w-8 h-8 text-blue-500 animate-bounce" />
+                <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <PhoneCall className="w-6 h-6 text-blue-500 animate-bounce" />
                 </div>
-                <p className="text-slate-300 font-medium">
-                  {isIncoming ? "Waiting for you to join..." : "Connecting to peer..."}
+                <p className="text-slate-400 text-sm">
+                  {isIncoming ? "Call waiting..." : "Connecting peer..."}
                 </p>
               </div>
             ) : isVoiceOnly ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500 animate-ping opacity-50" />
+                <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                  <div className="w-4 h-4 rounded-full bg-emerald-500 animate-ping" />
                 </div>
-                <span className="text-emerald-400 text-sm font-medium">Connected</span>
+                <span className="text-emerald-400 text-sm">Secure Connection</span>
               </div>
             ) : (
               <>
                 <canvas
                   ref={remoteCanvasRef}
-                  className="w-full h-full object-cover block mx-auto"
-                  style={{ minHeight: '100%' }}
+                  className="w-full h-full object-cover block mx-auto transition-all duration-700"
+                  style={{
+                    minHeight: '100%',
+                    transform: 'translateZ(0)',
+                    // CSS FALLBACK: If Canvas API filter fails on mobile, 
+                    // this CSS filter acts as a safety net.
+                    filter: blur > 0 ? `blur(${blur}px)` : 'none'
+                  }}
                 />
                 {!remoteReady && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                  <div className="absolute inset-0 flex items-center justify-center">
                     <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
                   </div>
                 )}
@@ -235,16 +236,16 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
           </div>
         </div>
 
-        {/* Controls */}
+        {/* Call Actions */}
         <div className="px-6 py-6 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-4">
           {isIncoming && !remoteStream && (
             <Button
               onClick={onAnswer}
               size="lg"
-              className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-full px-8 h-12 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-full px-10 h-14 shadow-xl active:scale-95 transition-all"
             >
               <PhoneCall className="w-5 h-5 mr-2" />
-              Answer Call
+              Answer
             </Button>
           )}
 
@@ -252,20 +253,20 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
             onClick={onEnd}
             variant="destructive"
             size="lg"
-            className="rounded-full px-8 h-12 shadow-lg shadow-red-900/20 transition-all active:scale-95"
+            className="rounded-full px-10 h-14 shadow-xl active:scale-95 transition-all"
           >
             <PhoneOff className="w-5 h-5 mr-2" />
             {isIncoming && !remoteStream ? "Decline" : "End Call"}
           </Button>
 
           {onMinimize && (
-            <Button onClick={onMinimize} variant="ghost" className="text-slate-400 hover:text-white">
+            <Button onClick={onMinimize} variant="ghost" className="text-slate-500 hover:text-white">
               Minimize
             </Button>
           )}
         </div>
 
-        {/* Media Engines (Hidden) */}
+        {/* Hidden Engines */}
         <video ref={localVideoRef} muted playsInline autoPlay className="hidden" />
         <video ref={remoteVideoRef} playsInline autoPlay className="hidden" />
         <audio ref={remoteAudioRef} autoPlay className="hidden" />
