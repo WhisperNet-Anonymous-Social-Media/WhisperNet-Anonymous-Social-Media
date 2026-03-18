@@ -60,7 +60,7 @@ export const Layout: React.FC = () => {
       <main className="flex-1 md:pl-72 pt-16 md:pt-0 relative z-10 overflow-x-hidden">
         <div
           className={cn(
-            "sticky top-16 md:top-0 z-40 h-12 border-b backdrop-blur-lg flex items-center justify-center transition-colors duration-500",
+            "hidden md:flex sticky top-0 z-40 h-12 border-b backdrop-blur-lg items-center justify-center transition-colors duration-500",
             getMoodStyles(currentMood)
           )}
         >

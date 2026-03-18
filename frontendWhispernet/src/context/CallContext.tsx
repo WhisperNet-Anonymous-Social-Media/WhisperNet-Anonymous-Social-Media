@@ -273,23 +273,6 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCallMode(mode === "video" ? "video" : "voice");
       setIsCallModalOpen(true);
       startRinging();
-
-      toast(`Incoming ${mode === "video" ? "video" : "voice"} call`, {
-        description: `${from} is calling you`,
-        action: {
-          label: "Accept",
-          onClick: () => {
-            answerCall();
-          },
-        },
-        cancel: {
-          label: "Decline",
-          onClick: () => {
-            declineCall();
-          },
-        },
-        duration: 20000,
-      });
     };
 
     const onAnswered = ({ signal }: { signal: any }) => {
