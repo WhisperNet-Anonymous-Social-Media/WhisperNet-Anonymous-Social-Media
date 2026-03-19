@@ -78,7 +78,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       setRemoteReady(false);
       return;
     }
-    setBlur(20);
+    setBlur(5);
   }, [open]);
 
   // Gradual unblur logic
