@@ -15,6 +15,8 @@ type CallContextType = {
   callMode: "voice" | "video";
   isInCall: boolean;
   isCallModalOpen: boolean;
+  isMicMuted: boolean;
+  isCameraOff: boolean;
   incomingCall: IncomingCall | null;
   startCall: (contact: string) => Promise<void>;
   startVoiceCall: (contact: string) => Promise<void>;
@@ -24,6 +26,8 @@ type CallContextType = {
   endCall: (notifyPeer?: boolean) => void;
   openCallModal: () => void;
   closeCallModal: () => void;
+  toggleMic: () => void;
+  toggleCamera: () => void;
 };
 
 // Metered.ca Free Open Relay Config
@@ -60,6 +64,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [callMode, setCallMode] = useState<"voice" | "video">("voice");
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
   const ringTimerRef = useRef<number | null>(null);
   const pendingSignalsRef = useRef<any[]>([]);
   const incomingCallRef = useRef<IncomingCall | null>(null);
@@ -108,6 +114,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         video: mode === "video",
         audio: true
       });
+      setIsMicMuted(false);
+      setIsCameraOff(false);
       setLocalStream(stream);
       return stream;
     } catch (err) {
@@ -131,6 +139,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     incomingCallRef.current = null;
     setCallContact(null);
     setCallMode("voice");
+    setIsMicMuted(false);
+    setIsCameraOff(false);
     setIsInCall(false);
     pendingSignalsRef.current = [];
     startInFlightRef.current = false;
@@ -279,6 +289,24 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     stopRinging();
   }, [socket, incomingCall, user, stopRinging]);
 
+  const toggleMic = useCallback(() => {
+    if (!localStream) return;
+    const next = !isMicMuted;
+    localStream.getAudioTracks().forEach((t) => {
+      t.enabled = !next;
+    });
+    setIsMicMuted(next);
+  }, [localStream, isMicMuted]);
+
+  const toggleCamera = useCallback(() => {
+    if (!localStream) return;
+    const next = !isCameraOff;
+    localStream.getVideoTracks().forEach((t) => {
+      t.enabled = !next;
+    });
+    setIsCameraOff(next);
+  }, [localStream, isCameraOff]);
+
   // CRITICAL: Ensure room re-entry on socket reconnection
   useEffect(() => {
     if (!socket || !user?.pseudonym) return;
@@ -365,6 +393,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         callContact,
         isInCall,
         isCallModalOpen,
+        isMicMuted,
+        isCameraOff,
         incomingCall,
         callMode,
         startCall,
@@ -375,6 +405,8 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         endCall,
         openCallModal: () => setIsCallModalOpen(true),
         closeCallModal: () => setIsCallModalOpen(false),
+        toggleMic,
+        toggleCamera,
       }}
     >
       {children}
@@ -385,6 +417,10 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         contact={incomingCall?.from || callContact}
         localStream={localStream}
         remoteStream={remoteStream}
+        isMicMuted={isMicMuted}
+        isCameraOff={isCameraOff}
+        onToggleMic={toggleMic}
+        onToggleCamera={toggleCamera}
         onAnswer={answerCall}
         onEnd={() => {
           if (incomingCall && !isInCall) {

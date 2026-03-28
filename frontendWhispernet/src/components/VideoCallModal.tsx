@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { PhoneOff, PhoneCall, ShieldCheck, Loader2 } from "lucide-react";
+import { PhoneOff, PhoneCall, ShieldCheck, Loader2, Mic, MicOff, Video, VideoOff } from "lucide-react";
 
 interface VideoCallModalProps {
   open: boolean;
@@ -9,8 +9,12 @@ interface VideoCallModalProps {
   contact?: string | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  isMicMuted?: boolean;
+  isCameraOff?: boolean;
   onAnswer: () => void;
   onEnd: () => void;
+  onToggleMic?: () => void;
+  onToggleCamera?: () => void;
   onMinimize?: () => void;
 }
 
@@ -55,8 +59,12 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   contact,
   localStream,
   remoteStream,
+  isMicMuted = false,
+  isCameraOff = false,
   onAnswer,
   onEnd,
+  onToggleMic,
+  onToggleCamera,
   onMinimize,
 }) => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -237,7 +245,7 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
         </div>
 
         {/* Call Actions */}
-        <div className="px-6 py-6 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-4">
+        <div className="px-6 py-6 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-3 flex-wrap">
           {isIncoming && !remoteStream && (
             <Button
               onClick={onAnswer}
@@ -246,6 +254,30 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
             >
               <PhoneCall className="w-5 h-5 mr-2" />
               Answer
+            </Button>
+          )}
+
+          <Button
+            onClick={onToggleMic}
+            variant={isMicMuted ? "destructive" : "secondary"}
+            size="lg"
+            className="rounded-full px-6 h-14 shadow-md active:scale-95 transition-all"
+            disabled={!onToggleMic}
+          >
+            {isMicMuted ? <MicOff className="w-5 h-5 mr-2" /> : <Mic className="w-5 h-5 mr-2" />}
+            {isMicMuted ? "Mic Off" : "Mic On"}
+          </Button>
+
+          {!isVoiceOnly && (
+            <Button
+              onClick={onToggleCamera}
+              variant={isCameraOff ? "destructive" : "secondary"}
+              size="lg"
+              className="rounded-full px-6 h-14 shadow-md active:scale-95 transition-all"
+              disabled={!onToggleCamera}
+            >
+              {isCameraOff ? <VideoOff className="w-5 h-5 mr-2" /> : <Video className="w-5 h-5 mr-2" />}
+              {isCameraOff ? "Camera Off" : "Camera On"}
             </Button>
           )}
 
