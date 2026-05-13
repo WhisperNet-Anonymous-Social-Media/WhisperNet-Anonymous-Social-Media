@@ -4,6 +4,9 @@ const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 const MODEL_CANDIDATES = [
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+  "gemini-2.0-flash",
   "gemini-1.5-flash",
   "gemini-1.5-pro",
 ];
@@ -19,7 +22,14 @@ async function askGemini(prompt) {
   for (const modelName of MODEL_CANDIDATES) {
     try {
       const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent(prompt);
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: String(prompt || "") }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 180,
+          topP: 0.9,
+        },
+      });
       const text = result?.response?.text?.();
       if (!text) throw new Error("Empty Gemini response");
       return text;
