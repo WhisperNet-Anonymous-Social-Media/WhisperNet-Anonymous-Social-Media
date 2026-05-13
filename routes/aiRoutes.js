@@ -25,10 +25,11 @@ router.post("/summarize", authMiddleware, async (req, res) => {
         }
 
         const prompt = `
-Summarize the following text in 2 short lines (TL;DR):
+Please provide a concise summary of the following text in exactly 2 short lines:
 
-"${text}"
-`;
+${text}
+
+Summary:`;
 
         let summary = "";
         try {
