@@ -47,6 +47,9 @@ const postSchema = new mongoose.Schema({
   bookmarks: [{ type: String }], 
   impressions: { type: Number, default: 0 },
   impressionUsers: [{ type: String }],
+  aiSummary: { type: String, default: "" },
+  aiSummarySource: { type: String, enum: ["gemini", "local_fallback"], default: "gemini" },
+  aiSummaryUpdatedAt: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -120,12 +120,27 @@ export const PostCard: React.FC<PostCardProps> = ({
   };
 
   const handleSummarize = async () => {
+    const cacheKey = `whispernet_summary_${displayPost._id}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      setSummary(cached);
+      return;
+    }
+
     setIsSummarizing(true);
     setSummary(null);
     try {
-      const { data } = await API.post('/api/ai/summarize', { text: displayPost.content });
+      const { data } = await API.post('/api/ai/summarize', {
+        text: displayPost.content,
+        postId: displayPost._id,
+        allowFallback: true,
+      });
       setSummary(data.summary);
-    } catch (error) { toast.error("AI is busy."); }
+      if (data?.summary) sessionStorage.setItem(cacheKey, data.summary);
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || "AI is busy.";
+      toast.error(msg);
+    }
     finally { setIsSummarizing(false); }
   };
 
