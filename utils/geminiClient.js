@@ -4,8 +4,10 @@ const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 const MODEL_CANDIDATES = [
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
+  "gemini-3.1-flash-lite", // Best for high-volume/speed
+  "gemini-3-flash-preview", // The standard 3.1 Flash (current preview ID)
+  "gemini-1.5-flash",       // Reliable legacy fallback
+  "gemini-1.5-pro",         // Highest quality/complex reasoning
 ];
 
 async function askGemini(prompt) {
